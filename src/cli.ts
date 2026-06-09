@@ -15,8 +15,8 @@ import {
 import { upskill } from "./upskill/index.ts";
 import { buildTestTrace } from "./upskill/payload.ts";
 import { emitTrace } from "./upskill/telemetry.ts";
+import { VERSION } from "./version.ts";
 
-const VERSION = "0.1.0";
 const DISTILL_HOME = join(homedir(), ".distill");
 const STATE_PATH = join(DISTILL_HOME, "state.json");
 const COUNTER_PATH = join(DISTILL_HOME, "counter.json");
@@ -49,7 +49,7 @@ OPTIONS
   -h, --help       show this message
   -v, --version    show version
 
-Run 'distill <command> --help' for command-specific help.`);
+--help with any command shows this message.`);
 }
 
 async function main(): Promise<number> {
@@ -74,6 +74,14 @@ async function main(): Promise<number> {
   const rest = argv.slice(cmdIdx + 1);
   const preCommandFlags = argv.slice(0, cmdIdx);
   const flags = parseFlags([...preCommandFlags, ...rest]);
+
+  // --help anywhere wins over command dispatch. Without this check,
+  // `distill upskill --help` would run a 30s LLM pass instead of
+  // printing help.
+  if (flags.help) {
+    usage();
+    return 0;
+  }
 
   switch (cmd) {
     case "-h":
@@ -131,10 +139,12 @@ function parseFlags(args: string[]): Flags {
 async function runUpskill(flags: Flags): Promise<number> {
   const startedAt = new Date().toISOString();
   if (!flags.json) {
+    // Disclosure before the first emission, not after. The hook-spawned
+    // worker (json mode, stdout ignored) never consumes the notice.
+    maybeShowFirstRunNotice(flags.noTelemetry);
     console.log("distill upskill: scanning recent Claude Code sessions...");
   }
   const result = await upskill({ force: flags.force, noTelemetry: flags.noTelemetry });
-  maybeShowFirstRunNotice(flags.noTelemetry);
 
   if (flags.json) {
     console.log(JSON.stringify({ startedAt, ...result }, null, 2));
@@ -154,15 +164,23 @@ async function runUpskill(flags: Flags): Promise<number> {
 
   switch (result.verdict.verdict) {
     case "KEEP":
-      console.log(`distill upskill: drafted skill '${result.verdict.name}'`);
-      if (result.skillPath) console.log(`              ${result.skillPath}`);
+    case "MERGE": {
+      // The verdict alone isn't success: writeNewSkill/mergeSkill can
+      // fail. skillPath is the proof the file landed on disk.
+      if (!result.skillPath) {
+        console.log(
+          `distill upskill: ${result.verdict.verdict} verdict for '${result.verdict.name}' but writing failed`,
+        );
+        console.log(`              ${result.reason}`);
+        return 1;
+      }
+      const action = result.verdict.verdict === "KEEP" ? "new skill" : "extended skill";
+      console.log(`distill upskill: ${action} '${result.verdict.name}'`);
+      console.log(`              ${result.skillPath}`);
+      console.log(`              loads automatically in your next Claude Code session`);
       if (result.verdict.reason) console.log(`              reason: ${result.verdict.reason}`);
       return 0;
-    case "MERGE":
-      console.log(`distill upskill: extended skill '${result.verdict.name}'`);
-      if (result.skillPath) console.log(`              ${result.skillPath}`);
-      if (result.verdict.reason) console.log(`              reason: ${result.verdict.reason}`);
-      return 0;
+    }
     case "SKIP":
       console.log(`distill upskill: no skill from ${result.scanned} session(s)`);
       if (result.verdict.reason) console.log(`              reason: ${result.verdict.reason}`);

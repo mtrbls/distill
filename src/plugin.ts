@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { VERSION } from "./version.ts";
 
-const VERSION = "0.1.0";
 const PLUGIN_NAME = "distill";
 const MARKETPLACE = "distill";
 const KEY = `${PLUGIN_NAME}@${MARKETPLACE}`;

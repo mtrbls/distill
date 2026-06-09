@@ -9,6 +9,7 @@
 // resolved config says mode == "team" (which only flips after the
 // user accepts the consent notice at `distill team init`).
 
+import { VERSION } from "../version.ts";
 import { readConfig } from "./config.ts";
 import {
   msToUnixNano,
@@ -19,8 +20,6 @@ import {
 } from "./telemetry.ts";
 import type { Verdict } from "./types.ts";
 
-const DISTILL_VERSION = "0.1.1";
-
 export interface PhaseTrace {
   name: string;
   durationMs: number;
@@ -30,8 +29,12 @@ export interface PhaseTrace {
 }
 
 // Strict Level-2 allowlist. Any attr key not in this set is dropped
-// when mode == "solo". The list is short on purpose.
+// when mode == "solo". The list is short on purpose. Applies to BOTH
+// phase spans and the root span — every span goes through scrubAttrs
+// before emission, so future code can't accidentally leak a new
+// field in solo mode.
 const SOLO_ATTR_ALLOWLIST = new Set([
+  // phase span attrs
   "scanned",
   "eligible",
   "pairs",
@@ -45,6 +48,13 @@ const SOLO_ATTR_ALLOWLIST = new Set([
   "succeeded",
   "ms_since_last_run",
   "error_type",
+  // root span attrs
+  "distill.scanned",
+  "distill.pairs",
+  "distill.verdict_enum",
+  "distill.duration_ms",
+  // telemetry test span
+  "test",
 ]);
 
 export function buildTrace(args: {
@@ -71,7 +81,9 @@ export function buildTrace(args: {
     spanId: rootSpanId,
     startUnixNano: msToUnixNano(args.startedAtMs),
     endUnixNano: msToUnixNano(args.startedAtMs + args.durationMs),
-    attributes: rootAttrs,
+    // Root goes through the same scrub as phase spans: no span is
+    // exempt from the solo allowlist.
+    attributes: mode === "solo" ? scrubAttrs(rootAttrs) : rootAttrs,
     status: args.phases.some((p) => p.status === "error") ? "error" : "ok",
   };
 
@@ -100,7 +112,7 @@ export function buildTrace(args: {
   return {
     traceId,
     resource: buildResource(cfg.telemetry.install_id, mode, cfg.team?.id),
-    scope: { name: "distill", version: DISTILL_VERSION },
+    scope: { name: "distill", version: VERSION },
     spans: [rootSpan, ...phaseSpans],
   };
 }
@@ -124,7 +136,7 @@ function buildResource(
 ): Record<string, unknown> {
   const r: Record<string, unknown> = {
     "service.name": "distill",
-    "service.version": DISTILL_VERSION,
+    "service.version": VERSION,
     "process.runtime.name": "bun",
     "process.runtime.version": typeof Bun !== "undefined" ? (Bun as { version?: string }).version ?? "unknown" : "unknown",
     "os.type": process.platform,
@@ -148,7 +160,7 @@ export function buildTestTrace(): TraceData {
   return {
     traceId,
     resource: buildResource(cfg.telemetry.install_id, cfg.mode, cfg.team?.id),
-    scope: { name: "distill", version: DISTILL_VERSION },
+    scope: { name: "distill", version: VERSION },
     spans: [
       {
         name: "telemetry.test",
