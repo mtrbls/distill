@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & smoke test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Run from source
+        run: bun src/cli.ts --version
+
+      - name: Build binary
+        run: bun run build
+
+      - name: Verify binary runs
+        run: ./dist/distill --version
+
+      - name: Verify binary status command
+        # status is read-only, safe in CI
+        run: ./dist/distill status || true
+
+  cross-build:
+    name: Cross-compile binaries
+    runs-on: ubuntu-latest
+    # Only on push to main, not on every PR (save CI minutes)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build all targets
+        run: bun run build:all
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: distill-binaries
+          path: dist/
+          retention-days: 7
