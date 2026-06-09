@@ -1,0 +1,24 @@
+{
+  "name": "distill",
+  "version": "0.1.0",
+  "description": "Mine reusable skills from your Claude Code sessions",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "distill": "./dist/distill"
+  },
+  "scripts": {
+    "dev": "bun src/cli.ts",
+    "build": "bun build --compile --target=bun src/cli.ts --outfile=dist/distill",
+    "build:darwin-arm64": "bun build --compile --target=bun-darwin-arm64 src/cli.ts --outfile=dist/distill-darwin-arm64",
+    "build:darwin-amd64": "bun build --compile --target=bun-darwin-x64 src/cli.ts --outfile=dist/distill-darwin-amd64",
+    "build:linux-arm64": "bun build --compile --target=bun-linux-arm64 src/cli.ts --outfile=dist/distill-linux-arm64",
+    "build:linux-amd64": "bun build --compile --target=bun-linux-x64 src/cli.ts --outfile=dist/distill-linux-amd64",
+    "build:all": "bun run build:darwin-arm64 && bun run build:darwin-amd64 && bun run build:linux-arm64 && bun run build:linux-amd64",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.4.0"
+  }
+}
