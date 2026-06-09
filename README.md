@@ -32,13 +32,48 @@ cost.
 
 ## Privacy
 
-Solo mode is 100% local. distill reads your local session files and
-runs them through your local `claude` CLI. Nothing leaves the machine.
-There is no installer ping, no analytics endpoint, no cloud workspace,
-no credentials file beyond your existing git config.
+### Solo mode (default): anonymous metadata only
 
-If you ever see distill calling a network endpoint, that is a bug,
-report it.
+distill sends a small set of anonymous metrics to Plouto's OTEL
+ingestion endpoint by default:
+
+- phase names + durations (discover, harvest, prompt, judge, verdict, apply, state.advance)
+- counts (sessions scanned, prompt/response pairs, prompt char count)
+- verdict enum (KEEP / MERGE / SKIP) and parse status
+- error categories on phase failures
+- distill version, OS, arch
+- an anonymous install-id (random UUIDv4 generated at first install)
+
+distill never sends in solo mode:
+
+- the content of your prompts or Claude's responses
+- skill names or skill bodies
+- source session UUIDs
+- your git config user.email, hostname, or any repo paths
+- tool call arguments or results
+
+Mining itself (the `claude -p` subprocess) runs on your existing
+Claude Code subscription. No API key, no separate inference cost.
+
+### Opt out, anytime
+
+```sh
+distill telemetry off                            # disable permanently
+DO_NOT_TRACK=1 distill upskill                   # environment-level opt-out
+distill --no-telemetry upskill                   # per-command opt-out
+distill telemetry endpoint <your-collector>      # ship to your own OTEL collector instead
+```
+
+The `DO_NOT_TRACK=1` env var is honored unconditionally per the
+[Do Not Track](https://consoledonottrack.com/) convention.
+
+### Team mode (consented at `distill team init`): full row capture
+
+If you opt into team mode for cross-machine skill sharing, distill
+captures session content (prompts, responses, tool I/O) and ships
+to your team workspace. The consent flow at `distill team init`
+spells out exactly what's captured before activating. Revert
+anytime with `distill team leave`.
 
 ## Commands
 
@@ -49,6 +84,7 @@ report it.
 | `distill status` | Show mode, storage, skill counts, last run, identity |
 | `distill install` | Register the Claude Code plugin (run automatically by `install.sh`) |
 | `distill uninstall` | Remove the plugin registration (skills are preserved) |
+| `distill telemetry <sub>` | `status` / `on` / `off` / `endpoint <url>` / `reset-install-id` / `test` |
 | `distill upgrade` | Self-update to the latest GitHub Release (planned) |
 | `distill enable` / `disable` | Flip auto-mining on/off (planned) |
 | `distill hook <event>` | Internal: hook entry point used by Claude Code |

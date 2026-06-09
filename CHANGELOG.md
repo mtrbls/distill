@@ -13,6 +13,11 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   All hook scripts are updated automatically when you re-run
   `distill install`.
 - `Last mine:` in `distill status` is now `Last run:`.
+- **Anonymous telemetry is on by default.** distill sends phase
+  counts, durations, and verdict enums to Plouto's OTEL endpoint.
+  No prompt content, no skill bodies, no identity. Opt out with
+  `distill telemetry off`, `DO_NOT_TRACK=1`, or `--no-telemetry`.
+  See the README's Privacy section for the full data contract.
 
 ### Added
 
@@ -32,6 +37,19 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   the outcome (`discovery` | `extraction` | `judging` | `applying` |
   `done`). Surfaces in `distill upskill --json` and unblocks the
   v0.2 eval engine.
+- `src/upskill/config.ts` for persistent settings at
+  `~/.distill/config.json` (telemetry on/off, endpoint override,
+  install-id, first-run-notice state, mode).
+- `src/upskill/telemetry.ts` hand-rolled OTLP/HTTP/JSON exporter.
+  Fire-and-forget POST with 5s timeout, silent on failure (logs to
+  the file logger instead). No npm deps.
+- `src/upskill/payload.ts` mode-aware OTLP span builder. Solo
+  enforces a strict Level-2 attribute allowlist at the emission
+  boundary; team-only fields are scrubbed if mode is solo.
+- `distill telemetry` subcommand (status/on/off/endpoint/reset-install-id/test).
+- `--no-telemetry` global flag (place before or after the command).
+- First-run notice shown once after the first `distill upskill` or
+  `distill install`.
 
 ### Planned for 0.2.0
 

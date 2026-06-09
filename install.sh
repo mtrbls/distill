@@ -12,12 +12,26 @@
 #   DISTILL_PREFIX   install dir (default: $HOME/.distill)
 #   DISTILL_VERSION  pinned version (default: latest)
 #   DISTILL_REPO     GitHub owner/repo (default: PloutoAI/distill)
+#
+# Telemetry:
+#   anonymous telemetry is on by default. counts + durations only,
+#   no prompt content, no skill bodies, no identity. opt out:
+#     curl -fsSL https://distill.plouto.ai/install.sh | sh -s -- --no-telemetry
+#   or after install: distill telemetry off
+#   or environment:   export DO_NOT_TRACK=1
 
 set -eu
 
 REPO="${DISTILL_REPO:-PloutoAI/distill}"
 PREFIX="${DISTILL_PREFIX:-$HOME/.distill}"
 VERSION="${DISTILL_VERSION:-latest}"
+
+NO_TELEMETRY=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-telemetry) NO_TELEMETRY=1 ;;
+  esac
+done
 
 BIN_DIR="$PREFIX/bin"
 BIN_PATH="$BIN_DIR/distill"
@@ -117,9 +131,13 @@ chmod +x "$tmp_bin"
 mv "$tmp_bin" "$BIN_PATH"
 info "installed to $BIN_PATH"
 
-# Register Claude Code plugin
+# Register Claude Code plugin (and conditionally disable telemetry)
 info "registering Claude Code plugin"
-"$BIN_PATH" install || err "plugin registration failed. You can retry with: $BIN_PATH install"
+if [ "$NO_TELEMETRY" = "1" ]; then
+  "$BIN_PATH" install --no-telemetry || err "plugin registration failed. Retry: $BIN_PATH install"
+else
+  "$BIN_PATH" install || err "plugin registration failed. Retry: $BIN_PATH install"
+fi
 
 # PATH advice
 case ":$PATH:" in

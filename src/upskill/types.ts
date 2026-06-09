@@ -55,6 +55,7 @@ export interface UpskillOptions {
   config?: Partial<UpskillConfig>;
   force?: boolean;
   author?: string;
+  noTelemetry?: boolean;
 }
 
 export interface UpskillResult {
