@@ -17,8 +17,11 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 ### Added
 
 - `src/upskill/` directory replaces the monolithic `src/mine.ts`. The
-  pipeline is now seven focused modules with an acyclic dependency
-  graph: discover, harvest, judge, apply, state, types, index.
+  pipeline is now nine focused modules with an acyclic dependency
+  graph: discover, harvest, prompt, judge, verdict, apply, state,
+  types, index. The judge module is the only dirty boundary
+  (subprocess); prompt and verdict are pure functions reusable by
+  the v0.2 eval engine.
 - Tagged file logger at `~/.distill/logs/upskill.log` traces every
   phase (`[discover] found 4 candidates`, `[judge] claude ok`, etc.).
   Best-effort, swallows its own errors, never blocks the agent.

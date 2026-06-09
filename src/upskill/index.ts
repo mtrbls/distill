@@ -14,8 +14,10 @@ import { listExistingSkills, SKILLS_ROOT } from "../skill.ts";
 import { applyVerdict, gitEmailFallback } from "./apply.ts";
 import { findCandidates } from "./discover.ts";
 import { extractPairs } from "./harvest.ts";
-import { buildPrompt, parseVerdict, runJudge } from "./judge.ts";
+import { runJudge } from "./judge.ts";
+import { buildPrompt } from "./prompt.ts";
 import { advanceWatermark, readWatermark } from "./state.ts";
+import { parseVerdict } from "./verdict.ts";
 import {
   DEFAULT_CONFIG,
   type UpskillOptions,

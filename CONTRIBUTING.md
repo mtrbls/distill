@@ -59,15 +59,21 @@ Each produces a single binary in `dist/`.
   - `state.ts` — watermark read/write with versioning
   - `discover.ts` — find candidate session JSONLs
   - `harvest.ts` — extract prompt/response pairs from JSONLs
-  - `judge.ts` — build prompt, call `claude -p`, parse verdict
+  - `prompt.ts` — build the judge prompt (pure)
+  - `judge.ts` — invoke `claude -p` (the only subprocess in the pipeline)
+  - `verdict.ts` — parse the judge's JSON output (pure)
   - `apply.ts` — apply the KEEP/MERGE/SKIP verdict to SKILL.md files
 - `install.sh` — POSIX install script for end users
 
 Each upskill module answers one question: discovery (which sessions
-are worth looking at), harvest (what was said), judge (is this worth
-a skill, and what skill), apply (now what do we write), state (where
-did we leave off). The orchestrator coordinates; modules don't depend
-on each other.
+are worth looking at), harvest (what was said), prompt (what do we
+ask the judge), judge (what does the judge say), verdict (what does
+that mean structurally), apply (now what do we write), state (where
+did we leave off). The orchestrator coordinates; modules don't
+depend on each other. The boundary between pure modules (prompt,
+verdict, harvest) and the one dirty boundary (judge's `claude -p`
+subprocess) is intentional, so tests and the v0.2 eval engine can
+reuse the pure pieces without mocking I/O.
 
 ## Pull request checklist
 
