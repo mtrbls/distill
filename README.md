@@ -17,14 +17,14 @@ as Anthropic-format `SKILL.md` files into `~/.claude/skills/`. The next
 time Claude Code starts, those skills auto-load and shape the agent's
 behavior on your projects.
 
-distill runs the mining loop in two ways:
+distill runs the upskill loop in two ways:
 
 1. **Background.** A Claude Code plugin registers two hooks:
    `PostToolUse` (counter, every 30 tool calls) and `Stop` (every
    session end). When either fires, distill spawns a detached worker
    that scans recent sessions and decides whether to draft, extend, or
    skip a skill.
-2. **Manual.** Run `distill mine` whenever you want a one-off pass.
+2. **Manual.** Run `distill upskill` whenever you want a one-off pass.
 
 Mining itself runs on your existing Claude Code subscription via a
 `claude -p` subprocess. No API key required, no separate inference
@@ -44,9 +44,9 @@ report it.
 
 | Command | What it does |
 |---|---|
-| `distill mine` | Manually mine recent sessions for a skill |
-| `distill mine --force` | Ignore the watermark and rescan recent sessions |
-| `distill status` | Show mode, storage, skill counts, last mine, identity |
+| `distill upskill` | Review recent sessions for a new skill (one-off) |
+| `distill upskill --force` | Ignore the watermark and rescan recent sessions |
+| `distill status` | Show mode, storage, skill counts, last run, identity |
 | `distill install` | Register the Claude Code plugin (run automatically by `install.sh`) |
 | `distill uninstall` | Remove the plugin registration (skills are preserved) |
 | `distill upgrade` | Self-update to the latest GitHub Release (planned) |
@@ -54,14 +54,14 @@ report it.
 | `distill hook <event>` | Internal: hook entry point used by Claude Code |
 | `distill _mine` | Internal: detached worker entry, used by the hooks |
 
-## How it decides what to mine
+## How it decides what to upskill
 
 distill assembles a prompt containing:
 
 - The skills already present in your `~/.claude/skills/` (so the judge
   can decide whether to MERGE into one)
 - Recent prompt and response pairs from up to 5 sessions newer than
-  the last successful mine
+  the last successful run
 
 It passes the prompt to `claude -p`, parses a strict JSON verdict, and
 takes one of three actions:
@@ -81,7 +81,8 @@ recurring pattern, not a single observation.
 |---|---|
 | `~/.claude/skills/<name>/SKILL.md` | Mined skills, loaded by Claude Code natively |
 | `~/.distill/bin/distill` | The single binary (~58 MB) |
-| `~/.distill/state.json` | Mining watermark (last date + session UUID) |
+| `~/.distill/state.json` | Watermark (last date + session UUID, versioned) |
+| `~/.distill/logs/upskill.log` | Tagged trace from every phase (discover, harvest, judge, apply, state) |
 | `~/.distill/counter.json` | Tool-call counter for the intra-session trigger |
 | `~/.claude/plugins/cache/distill/...` | Plugin manifest + hooks.json (small, ~2 KB) |
 | `~/.claude/plugins/installed_plugins.json` | distill is listed here as an installed plugin |
@@ -111,7 +112,7 @@ develop, and that is the only thing.
 git clone https://github.com/mtrbls/distill.git
 cd distill
 bun src/cli.ts --version             # run from source
-bun src/cli.ts mine                  # mine your real sessions
+bun src/cli.ts upskill               # process your real sessions
 bun run build                        # produce a binary at dist/distill
 ./dist/distill --version             # verify the binary works
 ```

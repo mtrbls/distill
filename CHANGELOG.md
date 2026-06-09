@@ -6,11 +6,35 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Changed (breaking)
+
+- The `mine` subcommand is now `upskill`. `distill mine` returns an
+  unknown-command error. The internal `_mine` worker is now `_upskill`.
+  All hook scripts are updated automatically when you re-run
+  `distill install`.
+- `Last mine:` in `distill status` is now `Last run:`.
+
+### Added
+
+- `src/upskill/` directory replaces the monolithic `src/mine.ts`. The
+  pipeline is now seven focused modules with an acyclic dependency
+  graph: discover, harvest, judge, apply, state, types, index.
+- Tagged file logger at `~/.distill/logs/upskill.log` traces every
+  phase (`[discover] found 4 candidates`, `[judge] claude ok`, etc.).
+  Best-effort, swallows its own errors, never blocks the agent.
+- `state.json` now carries a `version: 1` field. Existing v0.1
+  state files without `version` are read as v1 and migrated on the
+  next write. No user action required.
+- `UpskillResult` carries a `phase` field naming which phase produced
+  the outcome (`discovery` | `extraction` | `judging` | `applying` |
+  `done`). Surfaces in `distill upskill --json` and unblocks the
+  v0.2 eval engine.
+
 ### Planned for 0.2.0
 
 - Evals for skills: replay engine, drift detection, quality scoring.
   See `INDIVIDUAL.md` in the spec repo for the design.
-- Onboarding probe: forced-KEEP first mine at install time so the
+- Onboarding probe: forced-KEEP first upskill at install time so the
   user sees a real skill within minutes of `curl ... | sh`.
 - `distill enable` / `distill disable` (config flag flip).
 - `distill upgrade` (self-update from GitHub Releases).

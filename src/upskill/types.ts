@@ -1,0 +1,67 @@
+// Shared types for the upskill pipeline.
+//
+// The orchestrator in index.ts depends on every other module.
+// Every other module depends only on this file (plus stdlib).
+// That is what keeps the dependency graph acyclic and what makes
+// each module testable in isolation in v0.2 when evals land.
+
+export interface Candidate {
+  path: string;
+  sessionUuid: string;
+  project: string;
+  mtimeMs: number;
+}
+
+export interface Pair {
+  user: string;
+  assistant: string;
+}
+
+export interface Verdict {
+  verdict: "KEEP" | "MERGE" | "SKIP";
+  name: string | null;
+  description: string | null;
+  trigger: string | null;
+  body: string | null;
+  reason: string | null;
+}
+
+export type Phase =
+  | "discovery"
+  | "extraction"
+  | "judging"
+  | "applying"
+  | "done";
+
+export interface UpskillConfig {
+  sessionsToMine: number;
+  maxMsgPerSession: number;
+  maxPromptChars: number;
+  judgeTimeoutMs: number;
+  activeSessionGraceMs: number;
+}
+
+export const DEFAULT_CONFIG: UpskillConfig = {
+  sessionsToMine: 5,
+  maxMsgPerSession: 60,
+  maxPromptChars: 60_000,
+  judgeTimeoutMs: 240_000,
+  activeSessionGraceMs: 30_000,
+};
+
+export interface UpskillOptions {
+  sessionsRoot?: string;
+  skillsRoot?: string;
+  config?: Partial<UpskillConfig>;
+  force?: boolean;
+  author?: string;
+}
+
+export interface UpskillResult {
+  phase: Phase;
+  scanned: number;
+  pairs: number;
+  verdict: Verdict | null;
+  skillPath: string | null;
+  reason: string;
+}

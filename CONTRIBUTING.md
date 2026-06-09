@@ -50,13 +50,24 @@ Each produces a single binary in `dist/`.
 ## Where the code lives
 
 - `src/cli.ts` — subcommand dispatcher
-- `src/mine.ts` — the mining flow (parse JSONL, build judge prompt,
-  call `claude -p`, parse verdict, write SKILL.md, advance watermark)
 - `src/skill.ts` — SKILL.md frontmatter read/write
 - `src/plugin.ts` — Claude Code plugin registration
+- `src/log.ts` — tagged file logger (writes to `~/.distill/logs/upskill.log`)
+- `src/upskill/` — the upskill pipeline, split into focused modules:
+  - `index.ts` — orchestrator (the only public surface)
+  - `types.ts` — shared types + `UpskillConfig`
+  - `state.ts` — watermark read/write with versioning
+  - `discover.ts` — find candidate session JSONLs
+  - `harvest.ts` — extract prompt/response pairs from JSONLs
+  - `judge.ts` — build prompt, call `claude -p`, parse verdict
+  - `apply.ts` — apply the KEEP/MERGE/SKIP verdict to SKILL.md files
 - `install.sh` — POSIX install script for end users
 
-Four source files. Keep it that way if possible.
+Each upskill module answers one question: discovery (which sessions
+are worth looking at), harvest (what was said), judge (is this worth
+a skill, and what skill), apply (now what do we write), state (where
+did we leave off). The orchestrator coordinates; modules don't depend
+on each other.
 
 ## Pull request checklist
 
@@ -66,7 +77,7 @@ Before opening a PR:
 - The change does not introduce a network call in solo mode
 - `bun src/cli.ts --version` still prints
 - `bun run build` still produces a working binary
-- Manual smoke test: `bun src/cli.ts mine` against your own
+- Manual smoke test: `bun src/cli.ts upskill` against your own
   `~/.claude/projects/`
 - Commit message uses imperative subject line, no Co-Authored-By trailer
 - The diff is small. distill is small.

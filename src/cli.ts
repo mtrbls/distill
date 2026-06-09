@@ -2,9 +2,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { mine } from "./mine.ts";
 import { installPlugin, isInstalled, uninstallPlugin } from "./plugin.ts";
 import { listExistingSkills, SKILLS_ROOT } from "./skill.ts";
+import { upskill } from "./upskill/index.ts";
 
 const VERSION = "0.1.0";
 const DISTILL_HOME = join(homedir(), ".distill");
@@ -15,24 +15,24 @@ const TURNS_THRESHOLD = 30;
 function usage(): void {
   console.log(`distill ${VERSION}
 
-Mine reusable skills from your Claude Code sessions.
+Distill reusable skills from your Claude Code sessions.
 
 USAGE
   distill <command> [options]
 
 COMMANDS
-  mine             Mine recent Claude Code sessions for a new skill
-  status           Show mode, storage, skill counts, last mine
+  upskill          Review recent Claude Code sessions for new skills
+  status           Show mode, storage, skill counts, last upskill run
   install          Register the Claude Code plugin (hooks + manifest)
   uninstall        Remove the Claude Code plugin registration
-  enable           Re-enable auto-mining (not yet implemented)
-  disable          Stop auto-mining (not yet implemented)
+  enable           Re-enable auto-upskill (not yet implemented)
+  disable          Stop auto-upskill (not yet implemented)
   upgrade          Self-update to the latest release (not yet implemented)
   hook <event>     Internal: hook entry point (counter|stop)
-  _mine            Internal: detached worker entry, same as mine
+  _upskill         Internal: detached worker entry, same as upskill
 
 OPTIONS
-  --force          mine: ignore watermark, rescan recent sessions
+  --force          upskill: ignore watermark, rescan recent sessions
   --json           emit machine-readable JSON output
   -h, --help       show this message
   -v, --version    show version
@@ -59,10 +59,10 @@ async function main(): Promise<number> {
     case "--version":
       console.log(VERSION);
       return 0;
-    case "mine":
-      return runMine(flags);
-    case "_mine":
-      return runMine({ ...flags, json: true });
+    case "upskill":
+      return runUpskill(flags);
+    case "_upskill":
+      return runUpskill({ ...flags, json: true });
     case "status":
       return runStatus(flags);
     case "hook":
@@ -99,12 +99,12 @@ function parseFlags(args: string[]): Flags {
   return f;
 }
 
-async function runMine(flags: Flags): Promise<number> {
+async function runUpskill(flags: Flags): Promise<number> {
   const startedAt = new Date().toISOString();
   if (!flags.json) {
-    console.log("distill mine: scanning recent Claude Code sessions...");
+    console.log("distill upskill: scanning recent Claude Code sessions...");
   }
-  const result = await mine({ force: flags.force });
+  const result = await upskill({ force: flags.force });
 
   if (flags.json) {
     console.log(JSON.stringify({ startedAt, ...result }, null, 2));
@@ -112,34 +112,30 @@ async function runMine(flags: Flags): Promise<number> {
   }
 
   if (result.scanned === 0) {
-    console.log(`distill mine: ${result.reason}`);
-    console.log("           run with --force to ignore the watermark and rescan.");
+    console.log(`distill upskill: ${result.reason}`);
+    console.log("              run with --force to ignore the watermark and rescan.");
     return 0;
   }
 
   if (!result.verdict) {
-    console.log(`distill mine: scanned ${result.scanned} session(s), ${result.reason}`);
+    console.log(`distill upskill: scanned ${result.scanned} session(s), ${result.reason}`);
     return 1;
   }
 
   switch (result.verdict.verdict) {
     case "KEEP":
-      console.log(
-        `distill mine: drafted skill '${result.verdict.name}'`,
-      );
-      if (result.skillPath) console.log(`           ${result.skillPath}`);
-      if (result.verdict.reason) console.log(`           reason: ${result.verdict.reason}`);
+      console.log(`distill upskill: drafted skill '${result.verdict.name}'`);
+      if (result.skillPath) console.log(`              ${result.skillPath}`);
+      if (result.verdict.reason) console.log(`              reason: ${result.verdict.reason}`);
       return 0;
     case "MERGE":
-      console.log(
-        `distill mine: extended skill '${result.verdict.name}'`,
-      );
-      if (result.skillPath) console.log(`           ${result.skillPath}`);
-      if (result.verdict.reason) console.log(`           reason: ${result.verdict.reason}`);
+      console.log(`distill upskill: extended skill '${result.verdict.name}'`);
+      if (result.skillPath) console.log(`              ${result.skillPath}`);
+      if (result.verdict.reason) console.log(`              reason: ${result.verdict.reason}`);
       return 0;
     case "SKIP":
-      console.log(`distill mine: no skill from ${result.scanned} session(s)`);
-      if (result.verdict.reason) console.log(`           reason: ${result.verdict.reason}`);
+      console.log(`distill upskill: no skill from ${result.scanned} session(s)`);
+      if (result.verdict.reason) console.log(`              reason: ${result.verdict.reason}`);
       return 0;
   }
 }
@@ -185,7 +181,7 @@ async function runStatus(flags: Flags): Promise<number> {
   console.log(
     `Skills:      ${minedSkills.length} mined by distill, ${untrackedSkills} other`,
   );
-  console.log(`Last mine:   ${lastMine ?? "never"}`);
+  console.log(`Last run:    ${lastMine ?? "never"}`);
   console.log(`Identity:    ${identity}`);
   return 0;
 }
@@ -197,13 +193,13 @@ async function runHook(event: string, _flags: Flags): Promise<number> {
       case "counter": {
         const next = bumpCounter();
         if (next >= TURNS_THRESHOLD) {
-          spawnMineDetached();
+          spawnUpskillDetached();
           resetCounter();
         }
         return 0;
       }
       case "stop": {
-        spawnMineDetached();
+        spawnUpskillDetached();
         resetCounter();
         return 0;
       }
@@ -266,10 +262,10 @@ function resetCounter(): void {
   }
 }
 
-function spawnMineDetached(): void {
+function spawnUpskillDetached(): void {
   const selfPath = resolveSelfPath();
   try {
-    const proc = Bun.spawn([selfPath, "_mine"], {
+    const proc = Bun.spawn([selfPath, "_upskill"], {
       stdout: "ignore",
       stderr: "ignore",
       stdin: "ignore",
