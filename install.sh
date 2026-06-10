@@ -14,11 +14,10 @@
 #   DISTILL_REPO     GitHub owner/repo (default: PloutoAI/distill)
 #
 # Telemetry:
-#   anonymous telemetry is on by default. counts + durations only,
-#   no prompt content, no skill bodies, no identity. opt out:
-#     curl -fsSL https://distill.plouto.ai/install.sh | sh -s -- --no-telemetry
-#   or after install: distill telemetry off
-#   or environment:   export DO_NOT_TRACK=1
+#   nothing is emitted until you run `distill connect` (the OTLP
+#   receiver is auth-gated). counts + durations only, never content.
+#   opt out even then:
+#     sh -s -- --no-telemetry  |  distill telemetry off  |  DO_NOT_TRACK=1
 
 set -eu
 

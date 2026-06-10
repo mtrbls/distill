@@ -5,14 +5,13 @@ import { join, resolve } from "node:path";
 import { installPlugin, isInstalled, uninstallPlugin } from "./plugin.ts";
 import { listExistingSkills, SKILLS_ROOT } from "./skill.ts";
 import {
-  markFirstRunNoticeShown,
   readConfig,
   resetInstallId,
   resolveTelemetry,
   setTelemetryEnabled,
 } from "./upskill/config.ts";
 import { upskill } from "./upskill/index.ts";
-import { buildTestTrace } from "./upskill/payload.ts";
+import { buildTestRecord } from "./upskill/payload.ts";
 import {
   connectViaBrowser,
   connectWithToken,
@@ -21,7 +20,7 @@ import {
   syncRecent,
 } from "./upskill/plouto.ts";
 import { teamInit, teamLeave, teamPull, teamShare } from "./upskill/team.ts";
-import { emitTrace } from "./upskill/telemetry.ts";
+import { emitLogs } from "./upskill/telemetry.ts";
 import { listSessionFiles, summarizeUsage } from "./upskill/usage.ts";
 import { VERSION } from "./version.ts";
 
@@ -168,9 +167,6 @@ function flagValue(args: string[], name: string): string | null {
 async function runUpskill(flags: Flags): Promise<number> {
   const startedAt = new Date().toISOString();
   if (!flags.json) {
-    // notice goes out before the first emission; the json worker
-    // (hook-spawned, stdout ignored) never shows it
-    maybeShowFirstRunNotice(flags.noTelemetry);
     console.log("distill upskill: scanning recent Claude Code sessions...");
   }
   const result = await upskill({ force: flags.force, noTelemetry: flags.noTelemetry });
@@ -386,8 +382,11 @@ async function runConnect(args: string[]): Promise<number> {
     return 1;
   }
   console.log(`distill: connected to ${result.apiUrl}`);
-  console.log("         recent sessions will sync after each Claude Code session ends.");
-  console.log("         run `distill sync` to push now, `distill disconnect` to unlink.");
+  console.log("         recent sessions will sync after each Claude Code session ends:");
+  console.log("         session metadata and pipeline counts/durations only, never");
+  console.log("         prompt content, tool inputs, or skill bodies.");
+  console.log("         `distill sync` pushes now, `distill disconnect` unlinks,");
+  console.log("         `distill telemetry off` keeps sync but silences pipeline counts.");
   return 0;
 }
 
@@ -490,7 +489,6 @@ async function runHook(event: string, _flags: Flags): Promise<number> {
 async function runInstall(flags: Flags): Promise<number> {
   if (flags.noTelemetry) {
     setTelemetryEnabled(false);
-    markFirstRunNoticeShown();
   }
   const binary = resolveSelfPath();
   const result = installPlugin({ distillBinaryPath: binary });
@@ -500,14 +498,6 @@ async function runInstall(flags: Flags): Promise<number> {
   console.log(`         binary:     ${binary}`);
   console.log("");
   console.log("Restart Claude Code to activate the hooks.");
-  if (!flags.noTelemetry) {
-    printFirstRunNotice();
-    markFirstRunNoticeShown();
-  } else {
-    console.log("");
-    console.log("Telemetry: disabled per --no-telemetry.");
-    console.log("Re-enable anytime with: distill telemetry on");
-  }
   return 0;
 }
 
@@ -626,38 +616,11 @@ async function runTelemetryTest(): Promise<number> {
     console.log(`distill telemetry test: telemetry disabled (${decision.reason})`);
     return 0;
   }
-  console.log(`distill telemetry test: POSTing dummy span to ${decision.endpoint}...`);
-  const trace = buildTestTrace();
-  await emitTrace({ trace, decision });
+  console.log(`distill telemetry test: POSTing a test record to ${decision.endpoint}...`);
+  const payload = buildTestRecord();
+  await emitLogs({ payload, decision });
   console.log("distill telemetry test: see ~/.distill/logs/upskill.log for the exporter's response.");
   return 0;
-}
-
-// ---------- first-run notice ----------
-
-function maybeShowFirstRunNotice(noTelemetryFlag: boolean): void {
-  const cfg = readConfig();
-  if (cfg.telemetry.first_run_notice_shown) return;
-  // already opted out for this run, don't nag, just mark it shown
-  if (noTelemetryFlag) {
-    markFirstRunNoticeShown();
-    return;
-  }
-  printFirstRunNotice();
-  markFirstRunNoticeShown();
-}
-
-function printFirstRunNotice(): void {
-  console.log("");
-  console.log("distill: anonymous telemetry is on by default. counts and durations");
-  console.log("         only, no prompt content, no skill bodies, no identity.");
-  console.log("");
-  console.log("         opt out:");
-  console.log("           distill telemetry off                disable permanently");
-  console.log("           DO_NOT_TRACK=1                       environment-level opt-out");
-  console.log("           distill --no-telemetry <command>     per-command opt-out");
-  console.log("");
-  console.log("         details: https://distill.plouto.ai/telemetry");
 }
 
 // ---------- helpers ----------

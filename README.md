@@ -32,39 +32,31 @@ cost.
 
 ## Privacy
 
-### Solo mode (default): anonymous metadata only
+### Default: nothing leaves the machine
 
-distill sends a small set of anonymous metrics to Plouto's OTEL
-ingestion endpoint by default:
+Disconnected distill emits no network traffic at all. Mining (the
+`claude -p` subprocess) runs on your existing Claude Code
+subscription; skills are local files; team sharing is your own git
+remote.
 
-- phase names + durations (discover, harvest, prompt, curate, verdict, apply, state.advance)
-- counts (sessions scanned, prompt/response pairs, prompt char count)
-- verdict enum (CREATE / UPDATE / SKIP) and parse status
-- error categories on phase failures
-- distill version, OS, arch
-- an anonymous install-id (random UUIDv4 generated at first install)
+### Pipeline telemetry: only when connected (or to your own collector)
 
-distill never sends in solo mode:
+Once you `distill connect`, each upskill run also reports pipeline
+counts and durations (phases, verdict enum, error categories, an
+anonymous install-id, distill version/OS/arch) to your workspace's
+OTLP endpoint. Never prompt content, skill names or bodies, session
+UUIDs, tool arguments, or your email.
 
-- the content of your prompts or Claude's responses
-- skill names or skill bodies
-- source session UUIDs
-- your git config user.email, hostname, or any repo paths
-- tool call arguments or results
-
-Mining itself (the `claude -p` subprocess) runs on your existing
-Claude Code subscription. No API key, no separate inference cost.
-
-### Opt out, anytime
+Power users can ship the same records to their own collector without
+any Plouto connection by setting `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
 ```sh
-distill telemetry off                            # disable permanently
-DO_NOT_TRACK=1 distill upskill                   # environment-level opt-out
-distill --no-telemetry upskill                   # per-command opt-out
-distill telemetry endpoint <your-collector>      # ship to your own OTEL collector instead
+distill telemetry off              # keep sync, silence pipeline counts
+DO_NOT_TRACK=1 distill upskill     # environment-level opt-out
+distill --no-telemetry upskill     # per-command opt-out
 ```
 
-The `DO_NOT_TRACK=1` env var is honored unconditionally per the
+`DO_NOT_TRACK=1` is honored unconditionally per the
 [Do Not Track](https://consoledonottrack.com/) convention.
 
 ## Team skills

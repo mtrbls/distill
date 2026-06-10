@@ -1,6 +1,9 @@
 // ~/.distill/config.json. Opt-out precedence:
 //   DO_NOT_TRACK > DISTILL_TELEMETRY=0 > --no-telemetry > config.enabled
-// Endpoint: OTEL_EXPORTER_OTLP_ENDPOINT or the default, nothing else.
+// Pipeline telemetry only has a receiver when connected to Plouto
+// (Plouto's OTLP endpoint is bearer-authed), so emission additionally
+// requires a connection. OTEL_EXPORTER_OTLP_ENDPOINT overrides the
+// target for users with their own collector.
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -12,14 +15,13 @@ const log = createLogger("config");
 const DISTILL_HOME = join(homedir(), ".distill");
 const CONFIG_PATH = join(DISTILL_HOME, "config.json");
 
-export const DEFAULT_OTEL_ENDPOINT = "https://otel.plouto.ai/v1/traces";
+const OTEL_LOGS_PATH = "/api/otel/v1/logs";
 
 const CURRENT_VERSION = 1;
 
 export interface TelemetryConfig {
   enabled: boolean;
   install_id: string;
-  first_run_notice_shown: boolean;
 }
 
 export interface TeamConfig {
@@ -47,6 +49,7 @@ export interface DistillConfig {
 export interface TelemetryDecision {
   emit: boolean;
   endpoint: string;
+  token: string | null;
   reason: string;
 }
 
@@ -67,7 +70,6 @@ function defaults(): DistillConfig {
     telemetry: {
       enabled: true,
       install_id: generateInstallId(),
-      first_run_notice_shown: false,
     },
     team: null,
     plouto: null,
@@ -92,7 +94,6 @@ export function readConfig(): DistillConfig {
         install_id: typeof tel.install_id === "string" && tel.install_id.length > 0
           ? tel.install_id
           : generateInstallId(),
-        first_run_notice_shown: !!tel.first_run_notice_shown,
       },
       team: raw.team ?? null,
       plouto: raw.plouto ?? null,
@@ -142,22 +143,34 @@ export function advanceSyncWatermark(lastSyncedAt: string): void {
 
 export function resolveTelemetry(args: { noTelemetryFlag?: boolean } = {}): TelemetryDecision {
   if (process.env.DO_NOT_TRACK === "1") {
-    return { emit: false, endpoint: "", reason: "DO_NOT_TRACK=1" };
+    return { emit: false, endpoint: "", token: null, reason: "DO_NOT_TRACK=1" };
   }
   if (process.env.DISTILL_TELEMETRY === "0") {
-    return { emit: false, endpoint: "", reason: "DISTILL_TELEMETRY=0" };
+    return { emit: false, endpoint: "", token: null, reason: "DISTILL_TELEMETRY=0" };
   }
   if (args.noTelemetryFlag) {
-    return { emit: false, endpoint: "", reason: "--no-telemetry" };
+    return { emit: false, endpoint: "", token: null, reason: "--no-telemetry" };
   }
   const cfg = readConfig();
   if (!cfg.telemetry.enabled) {
-    return { emit: false, endpoint: "", reason: "disabled in config" };
+    return { emit: false, endpoint: "", token: null, reason: "disabled in config" };
   }
   const envEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-  const endpoint =
-    (envEndpoint && envEndpoint.length > 0) ? envEndpoint : DEFAULT_OTEL_ENDPOINT;
-  return { emit: true, endpoint, reason: "enabled" };
+  if (envEndpoint && envEndpoint.length > 0) {
+    // user-supplied collector: no auth, their infrastructure
+    return { emit: true, endpoint: envEndpoint, token: null, reason: "custom collector" };
+  }
+  if (!cfg.plouto?.token) {
+    // Plouto's OTLP endpoint is bearer-authed; without a connection
+    // there is nowhere to send
+    return { emit: false, endpoint: "", token: null, reason: "not connected" };
+  }
+  return {
+    emit: true,
+    endpoint: `${cfg.plouto.api_url.replace(/\/$/, "")}${OTEL_LOGS_PATH}`,
+    token: cfg.plouto.token,
+    reason: "connected",
+  };
 }
 
 // ---------- setters used by `distill telemetry` subcommand ----------
@@ -176,8 +189,3 @@ export function resetInstallId(): string {
   return id;
 }
 
-export function markFirstRunNoticeShown(): void {
-  const cfg = readConfig();
-  cfg.telemetry.first_run_notice_shown = true;
-  writeConfig(cfg);
-}

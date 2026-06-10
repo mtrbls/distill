@@ -9,10 +9,10 @@ import { resolveTelemetry } from "./config.ts";
 import { runCurator } from "./curator.ts";
 import { findCandidates } from "./discover.ts";
 import { extractPairs } from "./harvest.ts";
-import { buildTrace, type PhaseTrace } from "./payload.ts";
+import { buildRunRecord, type PhaseTrace } from "./payload.ts";
 import { buildPrompt } from "./prompt.ts";
 import { advanceWatermark, readWatermark } from "./state.ts";
-import { emitTrace } from "./telemetry.ts";
+import { emitLogs } from "./telemetry.ts";
 import {
   DEFAULT_CONFIG,
   type UpskillOptions,
@@ -38,20 +38,20 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   const decision = resolveTelemetry({ noTelemetryFlag: opts.noTelemetry });
 
   async function finish(result: UpskillResult): Promise<UpskillResult> {
-    // emitTrace logs whether it emitted or skipped, so always call it
+    // emitLogs logs whether it emitted or skipped, so always call it
     try {
-      const trace = buildTrace({
+      const payload = buildRunRecord({
         startedAtMs,
         durationMs: Date.now() - startedAtMs,
         phases,
         verdict: result.verdict,
       });
       // fire and forget, main() lets the event loop drain this
-      emitTrace({ trace, decision }).catch((e) => {
-        log(`emitTrace promise rejected: ${(e as Error).message}`);
+      emitLogs({ payload, decision }).catch((e) => {
+        log(`emitLogs promise rejected: ${(e as Error).message}`);
       });
     } catch (e) {
-      log(`trace build failed: ${(e as Error).message}`);
+      log(`record build failed: ${(e as Error).message}`);
     }
     return result;
   }

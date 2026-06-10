@@ -1,5 +1,6 @@
-// Hand-rolled OTLP/HTTP/JSON exporter. Fire-and-forget, no retries,
-// failures only ever land in the file log.
+// Hand-rolled OTLP/HTTP/JSON exporter, logs flavor: Plouto serves
+// POST /api/otel/v1/logs and nothing else. Fire-and-forget, no
+// retries, failures only ever land in the file log.
 // https://opentelemetry.io/docs/specs/otlp/#otlphttp
 
 import { createLogger } from "../log.ts";
@@ -9,31 +10,20 @@ const log = createLogger("telemetry");
 
 const DEFAULT_TIMEOUT_MS = 5000;
 
-// ---------- types ----------
-
-export type SpanStatus = "ok" | "error";
-
-export interface SpanData {
-  name: string;
-  spanId: string;
-  parentSpanId?: string;
-  startUnixNano: bigint;
-  endUnixNano: bigint;
+export interface LogRecord {
+  body: string;
+  timeUnixNano: bigint;
   attributes: Record<string, unknown>;
-  status: SpanStatus;
 }
 
-export interface TraceData {
-  traceId: string;
+export interface LogsPayload {
   resource: Record<string, unknown>;
   scope: { name: string; version: string };
-  spans: SpanData[];
+  records: LogRecord[];
 }
 
-// ---------- emit ----------
-
-export async function emitTrace(args: {
-  trace: TraceData;
+export async function emitLogs(args: {
+  payload: LogsPayload;
   decision: TelemetryDecision;
 }): Promise<void> {
   if (!args.decision.emit) {
@@ -41,7 +31,7 @@ export async function emitTrace(args: {
     return;
   }
   const timeoutMs = Number(process.env.DISTILL_TELEMETRY_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
-  const body = JSON.stringify(buildOtlpJson(args.trace));
+  const body = JSON.stringify(buildOtlpLogsJson(args.payload));
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -49,6 +39,9 @@ export async function emitTrace(args: {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
+    if (args.decision.token) {
+      headers["Authorization"] = `Bearer ${args.decision.token}`;
+    }
     const headerCsv = process.env.OTEL_EXPORTER_OTLP_HEADERS;
     if (headerCsv) {
       for (const kv of headerCsv.split(",")) {
@@ -69,7 +62,7 @@ export async function emitTrace(args: {
     log(`ok: ${args.decision.endpoint} (${body.length} bytes)`);
   } catch (e) {
     const msg = (e as Error).message;
-    if (msg.includes("aborted")) {
+    if (msg.includes("abort")) {
       log(`timeout after ${timeoutMs}ms`);
     } else {
       log(`fetch failed: ${msg}`);
@@ -79,26 +72,22 @@ export async function emitTrace(args: {
   }
 }
 
-// ---------- JSON-OTLP encoder ----------
+// ---------- JSON-OTLP encoder (ExportLogsServiceRequest) ----------
 
-function buildOtlpJson(trace: TraceData): unknown {
+function buildOtlpLogsJson(payload: LogsPayload): unknown {
   return {
-    resourceSpans: [
+    resourceLogs: [
       {
-        resource: { attributes: kvList(trace.resource) },
-        scopeSpans: [
+        resource: { attributes: kvList(payload.resource) },
+        scopeLogs: [
           {
-            scope: trace.scope,
-            spans: trace.spans.map((s) => ({
-              traceId: trace.traceId,
-              spanId: s.spanId,
-              ...(s.parentSpanId ? { parentSpanId: s.parentSpanId } : {}),
-              name: s.name,
-              kind: 1,
-              startTimeUnixNano: s.startUnixNano.toString(),
-              endTimeUnixNano: s.endUnixNano.toString(),
-              status: { code: s.status === "ok" ? 1 : 2 },
-              attributes: kvList(s.attributes),
+            scope: payload.scope,
+            logRecords: payload.records.map((r) => ({
+              timeUnixNano: r.timeUnixNano.toString(),
+              observedTimeUnixNano: r.timeUnixNano.toString(),
+              severityNumber: 9, // INFO
+              body: { stringValue: r.body },
+              attributes: kvList(r.attributes),
             })),
           },
         ],
@@ -137,24 +126,8 @@ function anyValue(v: unknown): unknown {
   return { stringValue: String(v) };
 }
 
-// ---------- id + time helpers ----------
-
-export function newTraceId(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-export function newSpanId(): string {
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-export function nowUnixNano(): bigint {
-  return BigInt(Date.now()) * 1_000_000n;
-}
+// ---------- time helpers ----------
 
 export function msToUnixNano(ms: number): bigint {
-  return BigInt(ms) * 1_000_000n;
+  return BigInt(Math.floor(ms)) * 1_000_000n;
 }

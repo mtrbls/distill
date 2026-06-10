@@ -1,16 +1,10 @@
-// Builds the OTLP payload. Every span is scrubbed against an
-// allowlist at the emission boundary; counts, durations, and enums
-// only, regardless of mode.
+// Builds the OTLP logs payload for one upskill run. Every attribute
+// is scrubbed against an allowlist at the emission boundary: counts,
+// durations, and enums only.
 
 import { VERSION } from "../version.ts";
 import { readConfig } from "./config.ts";
-import {
-  msToUnixNano,
-  newSpanId,
-  newTraceId,
-  type SpanData,
-  type TraceData,
-} from "./telemetry.ts";
+import { msToUnixNano, type LogsPayload } from "./telemetry.ts";
 import type { Verdict } from "./types.ts";
 
 export interface PhaseTrace {
@@ -20,9 +14,10 @@ export interface PhaseTrace {
   status: "ok" | "error";
 }
 
-// Anything not listed here gets dropped, root span included.
+// Anything not listed here gets dropped. Phase attrs are scrubbed
+// against this set before being prefixed with the phase name.
 const SOLO_ATTR_ALLOWLIST = new Set([
-  // phase span attrs
+  // phase attrs
   "scanned",
   "eligible",
   "pairs",
@@ -36,65 +31,48 @@ const SOLO_ATTR_ALLOWLIST = new Set([
   "succeeded",
   "ms_since_last_run",
   "error_type",
-  // root span attrs
+  // run-level attrs
   "distill.scanned",
   "distill.pairs",
   "distill.verdict_enum",
   "distill.duration_ms",
-  // telemetry test span
+  // telemetry test record
   "test",
 ]);
 
-export function buildTrace(args: {
+export function buildRunRecord(args: {
   startedAtMs: number;
   durationMs: number;
   phases: PhaseTrace[];
   verdict: Verdict | null;
-}): TraceData {
+}): LogsPayload {
   const cfg = readConfig();
 
-  const traceId = newTraceId();
-  const rootSpanId = newSpanId();
-
-  const rootAttrs: Record<string, unknown> = {
+  const attrs: Record<string, unknown> = scrubAttrs({
     "distill.scanned": pickPhase(args.phases, "discover")?.attrs.scanned ?? 0,
     "distill.pairs": pickPhase(args.phases, "harvest")?.attrs.pairs ?? 0,
     "distill.verdict_enum": args.verdict?.verdict ?? "NONE",
     "distill.duration_ms": args.durationMs,
-  };
+  });
 
-  const rootSpan: SpanData = {
-    name: "upskill",
-    spanId: rootSpanId,
-    startUnixNano: msToUnixNano(args.startedAtMs),
-    endUnixNano: msToUnixNano(args.startedAtMs + args.durationMs),
-    attributes: scrubAttrs(rootAttrs),
-    status: args.phases.some((p) => p.status === "error") ? "error" : "ok",
-  };
-
-  const phaseSpans: SpanData[] = [];
-  let cursorMs = args.startedAtMs;
   for (const p of args.phases) {
-    const start = cursorMs;
-    const end = cursorMs + p.durationMs;
-    cursorMs = end;
-
-    phaseSpans.push({
-      name: p.name,
-      spanId: newSpanId(),
-      parentSpanId: rootSpanId,
-      startUnixNano: msToUnixNano(start),
-      endUnixNano: msToUnixNano(end),
-      attributes: scrubAttrs(p.attrs),
-      status: p.status,
-    });
+    attrs[`${p.name}.duration_ms`] = p.durationMs;
+    if (p.status === "error") attrs[`${p.name}.error`] = true;
+    for (const [k, v] of Object.entries(scrubAttrs(p.attrs))) {
+      attrs[`${p.name}.${k}`] = v;
+    }
   }
 
   return {
-    traceId,
     resource: buildResource(cfg.telemetry.install_id, cfg.team ? "team" : "solo"),
     scope: { name: "distill", version: VERSION },
-    spans: [rootSpan, ...phaseSpans],
+    records: [
+      {
+        body: "distill.upskill",
+        timeUnixNano: msToUnixNano(args.startedAtMs),
+        attributes: attrs,
+      },
+    ],
   };
 }
 
@@ -124,25 +102,18 @@ function buildResource(installId: string, mode: "solo" | "team"): Record<string,
   };
 }
 
-// ---------- minimal trace for `distill telemetry test` ----------
+// ---------- minimal record for `distill telemetry test` ----------
 
-export function buildTestTrace(): TraceData {
+export function buildTestRecord(): LogsPayload {
   const cfg = readConfig();
-  const traceId = newTraceId();
-  const rootSpanId = newSpanId();
-  const now = Date.now();
   return {
-    traceId,
     resource: buildResource(cfg.telemetry.install_id, cfg.team ? "team" : "solo"),
     scope: { name: "distill", version: VERSION },
-    spans: [
+    records: [
       {
-        name: "telemetry.test",
-        spanId: rootSpanId,
-        startUnixNano: msToUnixNano(now - 1),
-        endUnixNano: msToUnixNano(now),
+        body: "distill.telemetry_test",
+        timeUnixNano: msToUnixNano(Date.now()),
         attributes: { test: true },
-        status: "ok",
       },
     ],
   };
