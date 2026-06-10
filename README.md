@@ -6,7 +6,7 @@ One curl command. One self-contained binary. No npm, no Node, no cloud,
 no telemetry, no signup.
 
 ```sh
-curl -fsSL https://distill.plouto.ai/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/mtrbls/distill/main/install.sh | sh
 ```
 
 ## What it does
@@ -20,7 +20,7 @@ behavior on your projects.
 distill runs the upskill loop in two ways:
 
 1. **Background.** A Claude Code plugin registers two hooks:
-   `PostToolUse` (counter, every 30 tool calls) and `Stop` (every
+   `UserPromptSubmit` (counter, every 20 prompts) and `Stop` (every
    session end). When either fires, distill spawns a detached worker
    that scans recent sessions and decides whether to draft, extend, or
    skip a skill.
@@ -61,22 +61,12 @@ distill --no-telemetry upskill     # per-command opt-out
 
 ## Team skills
 
-Sharing skills with a team requires exactly one thing: a git repo
-everyone can push to. No accounts, no backend, no capture, free.
-
-```sh
-distill team init git@github.com:org/skills.git
-distill team share verify-integrations-before-sweep
-```
-
-The repo holds flat `<skill>/SKILL.md` dirs. distill clones it under
-`~/.distill/team/` and materializes skills into `~/.claude/skills/`
-on every pull (automatic after each session), so teammates' skills
-just appear. Skills the curator mines while you're on a team are
-shared automatically too; `team share` covers hand-written ones.
-Your own local skill always wins a name collision.
-Review-before-merge is repo policy (protected branch + PRs) if your
-team wants it.
+There is nothing to set up. Skills mined from sessions in a git
+project are written to that project's `.claude/skills/`, where Claude
+Code loads them natively for anyone working in the repo. The commit
+is the share, PR review is the quality gate, and teammates receive
+skills through the `git pull` they already do. Skills from non-repo
+or cross-project work go to the global `~/.claude/skills/`.
 
 ### Connected (opt-in via `distill connect`): session metadata
 
@@ -90,13 +80,6 @@ session history).
 
 `distill disconnect` stops it instantly; nothing local is removed.
 
-### Team mode (consented at `distill team init`): full row capture
-
-If you opt into team mode for cross-machine skill sharing, distill
-captures session content (prompts, responses, tool I/O) and ships
-to your team workspace. The consent flow at `distill team init`
-spells out exactly what's captured before activating. Revert
-anytime with `distill team leave`.
 
 ## Commands
 
@@ -105,21 +88,16 @@ anytime with `distill team leave`.
 | `distill upskill` | Review recent sessions for a new skill (one-off) |
 | `distill upskill --force` | Ignore the watermark and rescan recent sessions |
 | `distill usage` | Local token + tool usage report (`--days N`, `--json`) |
-| `distill team init <git-url>` | Join a team skills repo (any git remote, your existing git auth) |
-| `distill team share <skill>` | Publish one of your skills to the team repo |
-| `distill team pull` | Fetch teammates' skills now (also runs automatically after sessions) |
-| `distill team leave` | Unlink; materialized skills stay |
 | `distill connect` | Link this install to your Plouto workspace (browser sign-in, or `--token`) |
 | `distill sync` | Push recent session metadata to your workspace now |
 | `distill disconnect` | Unlink from Plouto; local data stays |
 | `distill status` | Show mode, storage, skill counts, last run, identity, connection |
 | `distill install` | Register the Claude Code plugin (run automatically by `install.sh`) |
 | `distill uninstall` | Remove the plugin registration (skills are preserved) |
-| `distill telemetry <sub>` | `status` / `on` / `off` / `endpoint <url>` / `reset-install-id` / `test` |
+| `distill telemetry <sub>` | `status` / `on` / `off` / `reset-install-id` / `test` |
 | `distill upgrade` | Self-update to the latest GitHub Release (planned) |
-| `distill enable` / `disable` | Flip auto-mining on/off (planned) |
 | `distill hook <event>` | Internal: hook entry point used by Claude Code |
-| `distill _mine` | Internal: detached worker entry, used by the hooks |
+| `distill _upskill` | Internal: detached worker entry, used by the hooks |
 
 ## How it decides what to upskill
 
