@@ -62,7 +62,13 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   // 1. Discover
   const t0 = Date.now();
   const watermark = readWatermark();
-  const eligible = findCandidates({ sessionsRoot, watermark, config, force });
+  const eligible = findCandidates({
+    sessionsRoot,
+    watermark,
+    config,
+    force,
+    triggerPath: opts.triggerTranscript,
+  });
   // one pass mines one project: the prompt is labeled with a single
   // project and the skill lands in a single repo, so evidence from
   // other projects must not leak in. Scope to the newest session's

@@ -11,8 +11,12 @@ export function findCandidates(args: {
   watermark: Watermark;
   config: UpskillConfig;
   force: boolean;
+  // the session whose hook spawned this run: exempt from the
+  // active-session grace, else mid-session mining can never see the
+  // very session that triggered it (it is being written to right now)
+  triggerPath?: string;
 }): Candidate[] {
-  const { sessionsRoot, watermark, config, force } = args;
+  const { sessionsRoot, watermark, config, force, triggerPath } = args;
 
   if (!existsSync(sessionsRoot)) {
     log(`sessions root missing: ${sessionsRoot}`);
@@ -47,8 +51,9 @@ export function findCandidates(args: {
       } catch {
         continue;
       }
-      if (fs.mtimeMs > activeGrace) continue;
-      if (fs.mtimeMs <= threshold) continue;
+      const isTrigger = p === triggerPath;
+      if (!isTrigger && fs.mtimeMs > activeGrace) continue;
+      if (!isTrigger && fs.mtimeMs <= threshold) continue;
       const sessionUuid = file.replace(/\.jsonl$/, "");
       candidates.push({
         path: p,

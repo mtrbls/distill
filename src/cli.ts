@@ -110,7 +110,7 @@ async function main(): Promise<number> {
     case "probe":
       return runProbe(flags);
     case "_upskill":
-      return runUpskill({ ...flags, json: true });
+      return runUpskill({ ...flags, json: true }, flagValue(rest, "--transcript") ?? undefined);
     case "usage":
       return runUsage(flags, rest);
     case "sync":
@@ -164,12 +164,16 @@ function flagValue(args: string[], name: string): string | null {
   return v.startsWith("--") ? null : v;
 }
 
-async function runUpskill(flags: Flags): Promise<number> {
+async function runUpskill(flags: Flags, triggerTranscript?: string): Promise<number> {
   const startedAt = new Date().toISOString();
   if (!flags.json) {
     console.log("distill upskill: scanning recent Claude Code sessions...");
   }
-  const result = await upskill({ force: flags.force, noTelemetry: flags.noTelemetry });
+  const result = await upskill({
+    force: flags.force,
+    noTelemetry: flags.noTelemetry,
+    triggerTranscript,
+  });
 
   // connected installs push session metadata after each pass
   const cfg = readConfig();
@@ -421,13 +425,13 @@ async function runHook(event: string, _flags: Flags): Promise<number> {
       case "counter": {
         const next = bumpCounter();
         if (next >= PROMPTS_THRESHOLD) {
-          spawnUpskillDetached();
+          spawnUpskillDetached(await hookTranscriptPath());
           resetCounter();
         }
         return 0;
       }
       case "stop": {
-        spawnUpskillDetached();
+        spawnUpskillDetached(await hookTranscriptPath());
         resetCounter();
         return 0;
       }
@@ -436,6 +440,23 @@ async function runHook(event: string, _flags: Flags): Promise<number> {
     }
   } catch {
     return 0;
+  }
+}
+
+// Claude Code pipes a JSON payload to hooks on stdin; transcript_path
+// identifies the session that fired the hook. Without it the worker
+// can never mine that session: mid-flight it is inside the
+// active-session grace window, and even at Stop it was written
+// seconds ago.
+async function hookTranscriptPath(): Promise<string | null> {
+  try {
+    if (process.stdin.isTTY) return null; // invoked by hand, no payload
+    const raw = await Bun.stdin.text();
+    if (!raw) return null;
+    const t = JSON.parse(raw)?.transcript_path;
+    return typeof t === "string" && t.length > 0 ? t : null;
+  } catch {
+    return null;
   }
 }
 
@@ -497,10 +518,12 @@ function resetCounter(): void {
   }
 }
 
-function spawnUpskillDetached(): void {
+function spawnUpskillDetached(transcriptPath?: string | null): void {
   const selfPath = resolveSelfPath();
+  const args = [selfPath, "_upskill"];
+  if (transcriptPath) args.push("--transcript", transcriptPath);
   try {
-    const proc = Bun.spawn([selfPath, "_upskill"], {
+    const proc = Bun.spawn(args, {
       stdout: "ignore",
       stderr: "ignore",
       stdin: "ignore",

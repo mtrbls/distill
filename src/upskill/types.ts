@@ -60,6 +60,9 @@ export interface UpskillOptions {
   author?: string;
   noTelemetry?: boolean;
   probe?: boolean;
+  // transcript of the session whose hook spawned this run; exempt
+  // from the active-session grace so it can be mined as-of-now
+  triggerTranscript?: string;
 }
 
 export interface UpskillResult {
