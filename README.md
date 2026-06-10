@@ -1,179 +1,79 @@
 # distill
 
-Mine reusable skills from your Claude Code sessions.
-
-One curl command. One self-contained binary. No npm, no Node, no cloud,
-no telemetry, no signup.
+Turns your Claude Code sessions into reusable skills, automatically.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/mtrbls/distill/main/install.sh | sh
 ```
 
-## What it does
+One self-contained binary. No npm, no Node, no cloud, no signup.
 
-distill reads your local Claude Code session history at
-`~/.claude/projects/*.jsonl`, finds recurring patterns, and writes them
-as Anthropic-format `SKILL.md` files into `~/.claude/skills/`. The next
-time Claude Code starts, those skills auto-load and shape the agent's
-behavior on your projects.
+## How it works
 
-distill runs the upskill loop in two ways:
+distill watches your Claude Code sessions in the background (every 20
+prompts and at each session end). When it spots a recurring pattern,
+a mistake you caught twice, a workflow you repeat, a check you skipped
+and regretted, it writes a standard `SKILL.md` that Claude Code loads
+automatically in your next session.
 
-1. **Background.** A Claude Code plugin registers two hooks:
-   `UserPromptSubmit` (counter, every 20 prompts) and `Stop` (every
-   session end). When either fires, distill spawns a detached worker
-   that scans recent sessions and decides whether to draft, extend, or
-   skip a skill.
-2. **Manual.** Run `distill upskill` whenever you want a one-off pass.
+The analysis runs through your own `claude` CLI, on your existing
+subscription. Nothing leaves your machine.
 
-Mining itself runs on your existing Claude Code subscription via a
-`claude -p` subprocess. No API key required, no separate inference
-cost.
+Skills mined from work in a git project land in that project's
+`.claude/skills/`. Everything else goes to `~/.claude/skills/`.
 
-## Privacy
+## Teams
 
-### Default: nothing leaves the machine
-
-Disconnected distill emits no network traffic at all. Mining (the
-`claude -p` subprocess) runs on your existing Claude Code
-subscription; skills are local files; team sharing is your own git
-remote.
-
-### Pipeline telemetry: only when connected (or to your own collector)
-
-Once you `distill connect`, each upskill run also reports pipeline
-counts and durations (phases, verdict enum, error categories, an
-anonymous install-id, distill version/OS/arch) to your workspace's
-OTLP endpoint. Never prompt content, skill names or bodies, session
-UUIDs, tool arguments, or your email.
-
-Power users can ship the same records to their own collector without
-any Plouto connection by setting `OTEL_EXPORTER_OTLP_ENDPOINT`.
-
-```sh
-distill telemetry off              # keep sync, silence pipeline counts
-DO_NOT_TRACK=1 distill upskill     # environment-level opt-out
-distill --no-telemetry upskill     # per-command opt-out
-```
-
-`DO_NOT_TRACK=1` is honored unconditionally per the
-[Do Not Track](https://consoledonottrack.com/) convention.
-
-## Team skills
-
-There is nothing to set up. Skills mined from sessions in a git
-project are written to that project's `.claude/skills/`, where Claude
-Code loads them natively for anyone working in the repo. The commit
-is the share, PR review is the quality gate, and teammates receive
-skills through the `git pull` they already do. Skills from non-repo
-or cross-project work go to the global `~/.claude/skills/`.
-
-### Connected (opt-in via `distill connect`): session metadata
-
-Linking your install to a Plouto workspace (free for solo) syncs
-session **metadata** after each Claude Code session ends: session IDs,
-working directory, git branch, timestamps, per-turn token counts by
-model, tool **names**, and your git email for attribution. Never
-prompt text, never tool inputs or outputs, never file content. This
-is what powers the plouto.ai dashboard (cost by model, usage trends,
-session history).
-
-`distill disconnect` stops it instantly; nothing local is removed.
-
+No setup. When a skill lands in your project repo, commit it like any
+file (PR review if your team wants it). Teammates get it with their
+next `git pull`, and their Claude loads it from there. Skills they
+mine flow back the same way.
 
 ## Commands
 
+You rarely need any of these. The background loop does the work.
+
 | Command | What it does |
 |---|---|
-| `distill upskill` | Review recent sessions for a new skill (one-off) |
-| `distill upskill --force` | Ignore the watermark and rescan recent sessions |
-| `distill usage` | Local token + tool usage report (`--days N`, `--json`) |
-| `distill connect` | Link this install to your Plouto workspace (browser sign-in, or `--token`) |
-| `distill sync` | Push recent session metadata to your workspace now |
-| `distill disconnect` | Unlink from Plouto; local data stays |
-| `distill status` | Show mode, storage, skill counts, last run, identity, connection |
-| `distill install` | Register the Claude Code plugin (run automatically by `install.sh`) |
-| `distill uninstall` | Remove the plugin registration (skills are preserved) |
-| `distill telemetry <sub>` | `status` / `on` / `off` / `reset-install-id` / `test` |
-| `distill upgrade` | Self-update to the latest GitHub Release (planned) |
-| `distill hook <event>` | Internal: hook entry point used by Claude Code |
-| `distill _upskill` | Internal: detached worker entry, used by the hooks |
+| `distill upskill` | Run an analysis pass now |
+| `distill usage` | Token and tool usage from your local sessions |
+| `distill status` | What distill knows: skills, last run, connection |
+| `distill connect` | Optional: link to a Plouto workspace for usage dashboards |
+| `distill uninstall` | Remove the plugin. Your skills stay. |
 
-## How it decides what to upskill
+`--json` works everywhere.
 
-distill assembles a prompt containing:
+## Privacy
 
-- The skills already present in your `~/.claude/skills/` (so the
-  curator can decide whether to update one)
-- Recent prompt and response pairs from up to 5 sessions newer than
-  the last successful run
-
-It passes the prompt to `claude -p`, parses a strict JSON verdict, and
-takes one of three actions:
-
-- **CREATE** writes a new `SKILL.md`
-- **UPDATE** extends an existing skill (version bump, merged source
-  sessions, appended contributors if the editor differs from the
-  author)
-- **SKIP** advances the watermark with no file changes
-
-The curator is told to default to SKIP. A skill should capture a
-recurring pattern, not a single observation.
-
-## Footprint
-
-| Location | Contents |
-|---|---|
-| `~/.claude/skills/<name>/SKILL.md` | Mined skills, loaded by Claude Code natively |
-| `~/.distill/bin/distill` | The single binary (~58 MB) |
-| `~/.distill/state.json` | Watermark (last date + session UUID, versioned) |
-| `~/.distill/logs/upskill.log` | Tagged trace from every phase (discover, harvest, curator, apply, state) |
-| `~/.distill/counter.json` | Tool-call counter for the intra-session trigger |
-| `~/.claude/plugins/cache/distill/...` | Plugin manifest + hooks.json (small, ~2 KB) |
-| `~/.claude/plugins/installed_plugins.json` | distill is listed here as an installed plugin |
-| `~/.claude/settings.json` | distill is enabled in `enabledPlugins` |
-
-Total disk: about 58 MB for the binary, a few hundred bytes for state.
+- Default: zero network traffic. Skills are local files, sharing is
+  your own git remote.
+- `distill connect` (optional) syncs session metadata to Plouto:
+  token counts, model names, tool names, timestamps. Never prompts,
+  never code, never file contents.
+- `DO_NOT_TRACK=1` and `distill telemetry off` are always honored.
 
 ## Uninstall
 
 ```sh
 distill uninstall
-```
-
-Removes the plugin registration, leaves your mined skills in
-`~/.claude/skills/` untouched. To also remove the binary:
-
-```sh
 rm -rf ~/.distill
 ```
 
+Skills in `~/.claude/skills/` and your repos are untouched.
+
 ## Development
 
-distill has zero npm dependencies. You need [Bun](https://bun.sh/) to
-develop, and that is the only thing.
+Requires [Bun](https://bun.sh), nothing else. There are zero
+dependencies and no install step.
 
 ```sh
-git clone https://github.com/mtrbls/distill.git
-cd distill
-bun src/cli.ts --version             # run from source
-bun src/cli.ts upskill               # process your real sessions
-bun run build                        # produce a binary at dist/distill
-./dist/distill --version             # verify the binary works
+git clone https://github.com/mtrbls/distill.git && cd distill
+bun test
+bun run build
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for project posture, the
-no-npm-deps rule, and the PR checklist.
-
-## Releases
-
-Binaries are published to [GitHub Releases](https://github.com/mtrbls/distill/releases)
-for darwin-arm64, darwin-amd64, linux-arm64, and linux-amd64. Each
-release ships a `SHA256SUMS` file the installer verifies against.
-
-`install.sh` resolves the latest release tag at install time. Pin to a
-specific version with `DISTILL_VERSION=v0.1.0 curl ... | sh`.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)
