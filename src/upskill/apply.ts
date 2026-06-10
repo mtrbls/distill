@@ -17,7 +17,6 @@ export function applyVerdict(args: {
   author: string;
 }): ApplyResult {
   const { verdict, candidates, skillsRoot, author } = args;
-  const sourceSessions = candidates.map((c) => c.sessionUuid);
   const sourceProjects = [...new Set(candidates.map((c) => c.dir ?? "").filter(Boolean))];
 
   if (verdict.verdict === "SKIP") {
@@ -41,7 +40,6 @@ export function applyVerdict(args: {
         description: verdict.description,
         trigger: verdict.trigger ?? undefined,
         body: verdict.body,
-        sourceSessions,
         sourceProjects,
         author,
       });
@@ -74,7 +72,6 @@ export function applyVerdict(args: {
       description: verdict.description ?? undefined,
       trigger: verdict.trigger ?? undefined,
       body: verdict.body,
-      newSourceSessions: sourceSessions,
       newSourceProjects: sourceProjects,
       editor: author,
     });

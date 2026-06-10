@@ -56,7 +56,6 @@ export function installStarterSkills(author: string): string[] {
         description: s.description,
         trigger: s.trigger,
         body: s.body,
-        sourceSessions: [],
         author,
       });
       written.push(s.name);

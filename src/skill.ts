@@ -10,7 +10,6 @@ export interface SkillFrontmatter {
   trigger?: string;
   author: string;
   contributors: string[];
-  source_sessions: string[];
   source_projects: string[];
   version: number;
   created_by: string;
@@ -50,8 +49,6 @@ function serializeFrontmatter(fm: SkillFrontmatter): string {
   if (fm.trigger) lines.push(`trigger: ${quoteIfNeeded(fm.trigger)}`);
   lines.push(`author: ${fm.author}`);
   lines.push(`contributors:${fm.contributors.length === 0 ? " []" : "\n" + fm.contributors.map((c) => `  - ${c}`).join("\n")}`);
-  lines.push(`source_sessions:`);
-  for (const s of fm.source_sessions) lines.push(`  - ${s}`);
   lines.push(`source_projects:${fm.source_projects.length === 0 ? " []" : "\n" + fm.source_projects.map((p) => `  - ${p}`).join("\n")}`);
   lines.push(`version: ${fm.version}`);
   lines.push(`created_by: ${fm.created_by}`);
@@ -81,9 +78,8 @@ function parseFrontmatter(raw: string): { fm: SkillFrontmatter | null; body: str
   const fmBlock = raw.slice(4, end);
   const body = raw.slice(end + 5);
 
-  const fm: Partial<SkillFrontmatter> & { contributors?: string[]; source_sessions?: string[]; source_projects?: string[] } = {
+  const fm: Partial<SkillFrontmatter> & { contributors?: string[]; source_projects?: string[] } = {
     contributors: [],
-    source_sessions: [],
     source_projects: [],
   };
   const lines = fmBlock.split("\n");
@@ -123,7 +119,6 @@ function parseFrontmatter(raw: string): { fm: SkillFrontmatter | null; body: str
         fm.updated_at = value;
         break;
       case "contributors":
-      case "source_sessions":
       case "source_projects": {
         const list: string[] = [];
         if (value && value !== "[]") {
@@ -135,8 +130,7 @@ function parseFrontmatter(raw: string): { fm: SkillFrontmatter | null; body: str
           j++;
         }
         if (key === "contributors") fm.contributors = list;
-        else if (key === "source_projects") fm.source_projects = list;
-        else fm.source_sessions = list;
+        else fm.source_projects = list;
         i = j - 1;
         break;
       }
@@ -154,7 +148,6 @@ function parseFrontmatter(raw: string): { fm: SkillFrontmatter | null; body: str
       trigger: fm.trigger,
       author: fm.author,
       contributors: fm.contributors ?? [],
-      source_sessions: fm.source_sessions ?? [],
       source_projects: fm.source_projects ?? [],
       version: fm.version ?? 1,
       created_by: fm.created_by ?? "distill",
@@ -179,7 +172,6 @@ export interface WriteNewSkillInput {
   description: string;
   trigger?: string;
   body: string;
-  sourceSessions: string[];
   sourceProjects?: string[];
   author: string;
 }
@@ -198,7 +190,6 @@ export function writeNewSkill(input: WriteNewSkillInput): { path: string; versio
     trigger: input.trigger ? oneLine(input.trigger) : undefined,
     author: input.author,
     contributors: [],
-    source_sessions: input.sourceSessions,
     source_projects: input.sourceProjects ?? [],
     version: 1,
     created_by: "distill",
@@ -216,7 +207,6 @@ export interface MergeSkillInput {
   description?: string;
   trigger?: string;
   body: string;
-  newSourceSessions: string[];
   newSourceProjects?: string[];
   editor: string;
 }
@@ -233,7 +223,6 @@ export function mergeSkill(input: MergeSkillInput): { path: string; version: num
   if (!existing) {
     throw new Error(`skill ${input.name} has unparseable frontmatter at ${path}`);
   }
-  const mergedSources = Array.from(new Set([...existing.source_sessions, ...input.newSourceSessions]));
   const mergedProjects = Array.from(new Set([...existing.source_projects, ...(input.newSourceProjects ?? [])]));
   const isCrossAuthor = existing.author !== input.editor;
   const contributors = isCrossAuthor
@@ -244,7 +233,6 @@ export function mergeSkill(input: MergeSkillInput): { path: string; version: num
     ...existing,
     description: input.description ? oneLine(input.description) : existing.description,
     trigger: input.trigger ? oneLine(input.trigger) : existing.trigger,
-    source_sessions: mergedSources,
     source_projects: mergedProjects,
     contributors,
     version: existing.version + 1,

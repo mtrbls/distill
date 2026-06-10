@@ -22,7 +22,6 @@ describe("writeNewSkill", () => {
       description: "Verify targets exist before bulk changes",
       trigger: "About to bulk-update identifiers",
       body: "## When to use\nBefore sweeps.",
-      sourceSessions: ["uuid-1"],
       author: "alice@example.com",
     });
     expect(version).toBe(1);
@@ -35,7 +34,6 @@ describe("writeNewSkill", () => {
     expect(fm.description).toBe("Verify targets exist before bulk changes");
     expect(fm.author).toBe("alice@example.com");
     expect(fm.contributors).toEqual([]);
-    expect(fm.source_sessions).toEqual(["uuid-1"]);
     expect(fm.version).toBe(1);
     expect(fm.created_by).toBe("distill");
     expect(skills[0]!.body).toContain("Before sweeps.");
@@ -47,7 +45,6 @@ describe("writeNewSkill", () => {
       name: "dupe",
       description: "d",
       body: "b",
-      sourceSessions: [],
       author: "a@b.c",
     };
     writeNewSkill(input);
@@ -62,8 +59,7 @@ describe("writeNewSkill", () => {
           name: bad,
           description: "d",
           body: "b",
-          sourceSessions: [],
-          author: "a@b.c",
+              author: "a@b.c",
         }),
       ).toThrow(/invalid skill name/);
     }
@@ -76,7 +72,6 @@ describe("writeNewSkill", () => {
       description: "First line\nsecond line\n  third line  ",
       trigger: "When this\nhappens",
       body: "b",
-      sourceSessions: [],
       author: "a@b.c",
     });
     const fm = listExistingSkills(root)[0]!.frontmatter!;
@@ -90,7 +85,6 @@ describe("writeNewSkill", () => {
       name: "colon-desc",
       description: "Rule: always verify first",
       body: "b",
-      sourceSessions: [],
       author: "a@b.c",
     });
     const fm = listExistingSkills(root)[0]!.frontmatter!;
@@ -105,23 +99,20 @@ describe("mergeSkill", () => {
       name: "retry-webhooks",
       description: "Retry failed webhooks",
       body: "v1 body",
-      sourceSessions: ["uuid-1"],
       author: "alice@example.com",
     });
   }
 
-  test("bumps version and set-merges source sessions", () => {
+  test("bumps version on update", () => {
     seed();
     const { version } = mergeSkill({
       skillsRoot: root,
       name: "retry-webhooks",
       body: "v2 body",
-      newSourceSessions: ["uuid-1", "uuid-2"],
       editor: "alice@example.com",
     });
     expect(version).toBe(2);
     const fm = listExistingSkills(root)[0]!.frontmatter!;
-    expect(fm.source_sessions).toEqual(["uuid-1", "uuid-2"]);
     expect(fm.version).toBe(2);
   });
 
@@ -131,7 +122,6 @@ describe("mergeSkill", () => {
       skillsRoot: root,
       name: "retry-webhooks",
       body: "v2",
-      newSourceSessions: [],
       editor: "alice@example.com",
     });
     expect(listExistingSkills(root)[0]!.frontmatter!.contributors).toEqual([]);
@@ -143,7 +133,6 @@ describe("mergeSkill", () => {
       skillsRoot: root,
       name: "retry-webhooks",
       body: "v2",
-      newSourceSessions: [],
       editor: "bob@example.com",
     });
     const fm = listExistingSkills(root)[0]!.frontmatter!;
@@ -157,7 +146,6 @@ describe("mergeSkill", () => {
       skillsRoot: root,
       name: "retry-webhooks",
       body: "completely new body",
-      newSourceSessions: [],
       editor: "alice@example.com",
     });
     const body = listExistingSkills(root)[0]!.body;
@@ -171,8 +159,7 @@ describe("mergeSkill", () => {
         skillsRoot: root,
         name: "ghost",
         body: "b",
-        newSourceSessions: [],
-        editor: "a@b.c",
+          editor: "a@b.c",
       }),
     ).toThrow(/does not exist/);
   });
