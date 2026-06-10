@@ -6,6 +6,8 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-10
+
 ### Added (candidate skill tier)
 
 - New skills are no longer created directly. A first occurrence of a
@@ -187,5 +189,6 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 - Single self-contained binary via `bun build --compile`. No Node,
   no npm, no `node_modules` at install or runtime.
 
-[Unreleased]: https://github.com/mtrbls/distill/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mtrbls/distill/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mtrbls/distill/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mtrbls/distill/releases/tag/v0.1.0
