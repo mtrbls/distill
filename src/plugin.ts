@@ -107,22 +107,12 @@ export function installPlugin(opts: InstallOptions): InstallResult {
   mkdirSync(PLUGINS_DIR, { recursive: true });
   writeFileSync(INSTALLED_PLUGINS_PATH, JSON.stringify(installed, null, 2) + "\n");
 
-  // 5) Add to known_marketplaces.json (self-marketplace, no auto-update)
-  const marketplaces: JsonObject = readJsonOrDefault(KNOWN_MARKETPLACES_PATH, {});
-  if (!marketplaces[MARKETPLACE]) {
-    marketplaces[MARKETPLACE] = {
-      source: {
-        source: "github",
-        repo: "PloutoAI/distill",
-      },
-      installLocation: PLUGIN_INSTALL_DIR,
-      lastUpdated: registeredAt,
-      autoUpdate: false,
-    };
-    writeFileSync(KNOWN_MARKETPLACES_PATH, JSON.stringify(marketplaces, null, 2) + "\n");
-  }
+  // No known_marketplaces entry: the plugin is locally registered via
+  // installed_plugins + enabledPlugins, and a marketplace pointing at
+  // a repo Claude Code can't fetch causes startup errors (same class
+  // of bug as stale marketplace renames).
 
-  // 6) Enable the plugin in settings.json
+  // 5) Enable the plugin in settings.json
   const settings: JsonObject = readJsonOrDefault(SETTINGS_PATH, {});
   const enabledPlugins: JsonObject = (settings.enabledPlugins as JsonObject) ?? {};
   enabledPlugins[KEY] = true;

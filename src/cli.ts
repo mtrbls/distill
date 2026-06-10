@@ -565,11 +565,12 @@ function spawnUpskillDetached(): void {
 }
 
 function resolveSelfPath(): string {
-  // compiled binary: argv[0] is the binary path
-  // `bun src/cli.ts`: fall back to a PATH lookup
-  const argv0 = process.argv[0] ?? "distill";
-  if (argv0.endsWith("/distill") || argv0.endsWith("\\distill")) {
-    return resolve(argv0);
+  // compiled binary: execPath IS the binary (argv[0] is not reliable
+  // in compiled bun). `bun src/cli.ts`: execPath is the bun runtime,
+  // fall back to a PATH lookup.
+  const exe = process.execPath ?? "";
+  if (exe && !/[/\\]bun(-profile)?(\.exe)?$/.test(exe)) {
+    return resolve(exe);
   }
   return "distill";
 }
