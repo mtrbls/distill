@@ -21,7 +21,7 @@
 
 set -eu
 
-REPO="${DISTILL_REPO:-PloutoAI/distill}"
+REPO="${DISTILL_REPO:-mtrbls/distill}"
 PREFIX="${DISTILL_PREFIX:-$HOME/.distill}"
 VERSION="${DISTILL_VERSION:-latest}"
 

@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Tests
+        run: bun test
+
+      - name: Build all targets
+        run: bun run build:all
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum distill-* > SHA256SUMS
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "distill ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            dist/distill-darwin-arm64 \
+            dist/distill-darwin-amd64 \
+            dist/distill-linux-arm64 \
+            dist/distill-linux-amd64 \
+            dist/SHA256SUMS
