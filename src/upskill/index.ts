@@ -280,19 +280,17 @@ export type {
   UpskillResult,
 } from "./types.ts";
 
-// The placement anchor is the nearest ancestor that is a Claude
-// project root: a dir with an existing .claude/ (the root the team
-// already chose) or with .git (where a new .claude/ belongs so it
-// ships with the repo). $HOME never anchors — ~/.claude is the
-// user-global dir, not a project marker, and a dotfiles repo at home
-// must not capture every session under it.
+// The placement anchor is the nearest ancestor with an existing
+// .claude/ — the root the project already chose. Nothing else
+// anchors, by design: a .claude/ dir is the project's opt-in, and
+// distill never invents one in a repo that hasn't opted in (no
+// surprise dirs in checkouts, no accidental candidate commits to
+// other people's projects). $HOME never anchors — ~/.claude is the
+// user-global dir, not a project marker.
 export function findProjectRoot(dir: string, home: string = homedir()): string | null {
   let d = dir;
   while (true) {
-    if (d !== home) {
-      if (existsSync(join(d, ".claude"))) return d;
-      if (existsSync(join(d, ".git"))) return d;
-    }
+    if (d !== home && existsSync(join(d, ".claude"))) return d;
     const parent = join(d, "..");
     if (parent === d) return null;
     d = parent;

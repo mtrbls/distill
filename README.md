@@ -19,8 +19,10 @@ automatically in your next session.
 The analysis runs through your own `claude` CLI, on your existing
 subscription. Nothing leaves your machine.
 
-Skills mined from work in a git project land in that project's
-`.claude/skills/`. Everything else goes to `~/.claude/skills/`.
+Skills mined from work in a project land in that project's
+`.claude/skills/`. A project is any directory with a `.claude/`
+folder — that folder is the opt-in; distill never creates one on its
+own. Everything else goes to `~/.claude/skills/`.
 
 A pattern seen once becomes a *candidate* in `.claude/skill-candidates/`
 (dormant, never loaded, zero cost). When the pattern shows up again —

@@ -53,28 +53,27 @@ describe("findCandidates active-session grace", () => {
 });
 
 describe("findProjectRoot", () => {
-  test("finds the git root from a nested subdirectory", () => {
-    mkdirSync(join(root, "repo", ".git"), { recursive: true });
-    mkdirSync(join(root, "repo", "packages", "api"), { recursive: true });
-    expect(findProjectRoot(join(root, "repo", "packages", "api"))).toBe(join(root, "repo"));
-    expect(findProjectRoot(join(root, "repo"))).toBe(join(root, "repo"));
-  });
-
-  test("an existing .claude dir anchors without any git", () => {
+  test("anchors at the nearest .claude dir, from any depth", () => {
     mkdirSync(join(root, "ws", ".claude"), { recursive: true });
-    mkdirSync(join(root, "ws", "notes"), { recursive: true });
-    expect(findProjectRoot(join(root, "ws", "notes"))).toBe(join(root, "ws"));
+    mkdirSync(join(root, "ws", "packages", "api"), { recursive: true });
+    expect(findProjectRoot(join(root, "ws", "packages", "api"))).toBe(join(root, "ws"));
+    expect(findProjectRoot(join(root, "ws"))).toBe(join(root, "ws"));
   });
 
-  test("a subproject's own .claude wins over the repo root above it", () => {
-    mkdirSync(join(root, "mono", ".git"), { recursive: true });
+  test("a git repo without .claude does NOT anchor — projects opt in", () => {
+    mkdirSync(join(root, "repo", ".git"), { recursive: true });
+    mkdirSync(join(root, "repo", "src"), { recursive: true });
+    expect(findProjectRoot(join(root, "repo", "src"))).toBeNull();
+  });
+
+  test("a subproject's own .claude wins over one further up", () => {
+    mkdirSync(join(root, "mono", ".claude"), { recursive: true });
     mkdirSync(join(root, "mono", "svc", ".claude"), { recursive: true });
     mkdirSync(join(root, "mono", "svc", "src"), { recursive: true });
     expect(findProjectRoot(join(root, "mono", "svc", "src"))).toBe(join(root, "mono", "svc"));
   });
 
-  test("$HOME never anchors, even as a dotfiles repo", () => {
-    mkdirSync(join(root, "home", ".git"), { recursive: true });
+  test("$HOME never anchors", () => {
     mkdirSync(join(root, "home", ".claude"), { recursive: true });
     mkdirSync(join(root, "home", "scratch"), { recursive: true });
     expect(findProjectRoot(join(root, "home", "scratch"), join(root, "home"))).toBeNull();

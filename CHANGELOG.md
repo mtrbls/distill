@@ -16,10 +16,10 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   This moves recurrence detection from "two occurrences inside one
   curator prompt" to "a match against a persistent ledger", which
   works across sessions, across days, and across teammates.
-- Candidates from git-project work live in that project's
+- Candidates from project work live in that project's
   `.claude/skill-candidates/` and travel through git like skills do:
   one teammate's sighting plus another's adds up to a promotion.
-  Non-repo work uses `~/.distill/candidates/`.
+  Work outside any project uses `~/.distill/candidates/`.
 - Candidates that never recur are archived (not deleted) to a
   sibling `…-archive/` directory after 45 days
   (`candidateExpiryDays`).
@@ -33,12 +33,13 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Fixed (mining pipeline)
 
-- Placement anchors to the nearest Claude project root above the
-  session's cwd — a dir with an existing `.claude/`, else a git root
-  (`$HOME` never anchors). Sessions started in repo subdirectories
-  no longer leak skills to the global dirs, a subproject's own
-  `.claude/` is respected, and evidence spanning multiple projects
-  places globally rather than into either project's git history.
+- Placement anchors to the nearest existing `.claude/` directory
+  above the session's cwd, and nothing else (`$HOME` never anchors).
+  The `.claude/` folder is the project's opt-in: distill never
+  invents one in a repo that hasn't opted in. Sessions started in
+  subdirectories anchor correctly, a subproject's own `.claude/` is
+  respected, and evidence spanning multiple projects places globally
+  rather than into either project's git history.
 
 - Hooks read Claude Code's stdin payload and pass `transcript_path`
   to the worker; the triggering session is exempt from the
