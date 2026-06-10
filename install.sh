@@ -1,7 +1,7 @@
 #!/bin/sh
 # distill installer
 #
-#   curl -fsSL https://distill.plouto.ai/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/mtrbls/distill/main/install.sh | sh
 #
 # Downloads the matching distill binary from GitHub Releases, verifies
 # the checksum, installs to ~/.distill/bin/distill, registers the
