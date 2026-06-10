@@ -1,5 +1,5 @@
-// Usage metadata extractor. TypeScript port of Plouto's
-// server-side extractor — same whitelist discipline: build new
+// Usage metadata extractor, a port of Plouto's server-side
+// extractor whitelist. Same discipline on both sides: build new
 // objects with only the fields we've decided are safe, never copy.
 // Tool names yes, tool inputs never. Counts and enums, never content.
 
