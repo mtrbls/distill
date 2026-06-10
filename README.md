@@ -37,9 +37,9 @@ cost.
 distill sends a small set of anonymous metrics to Plouto's OTEL
 ingestion endpoint by default:
 
-- phase names + durations (discover, harvest, prompt, judge, verdict, apply, state.advance)
+- phase names + durations (discover, harvest, prompt, curate, verdict, apply, state.advance)
 - counts (sessions scanned, prompt/response pairs, prompt char count)
-- verdict enum (KEEP / MERGE / SKIP) and parse status
+- verdict enum (CREATE / UPDATE / SKIP) and parse status
 - error categories on phase failures
 - distill version, OS, arch
 - an anonymous install-id (random UUIDv4 generated at first install)
@@ -94,21 +94,21 @@ anytime with `distill team leave`.
 
 distill assembles a prompt containing:
 
-- The skills already present in your `~/.claude/skills/` (so the judge
-  can decide whether to MERGE into one)
+- The skills already present in your `~/.claude/skills/` (so the
+  curator can decide whether to update one)
 - Recent prompt and response pairs from up to 5 sessions newer than
   the last successful run
 
 It passes the prompt to `claude -p`, parses a strict JSON verdict, and
 takes one of three actions:
 
-- **KEEP** writes a new `SKILL.md`
-- **MERGE** extends an existing skill (version bump, merged source
+- **CREATE** writes a new `SKILL.md`
+- **UPDATE** extends an existing skill (version bump, merged source
   sessions, appended contributors if the editor differs from the
   author)
 - **SKIP** advances the watermark with no file changes
 
-The judge is told to default to SKIP. A skill should capture a
+The curator is told to default to SKIP. A skill should capture a
 recurring pattern, not a single observation.
 
 ## Footprint
@@ -118,7 +118,7 @@ recurring pattern, not a single observation.
 | `~/.claude/skills/<name>/SKILL.md` | Mined skills, loaded by Claude Code natively |
 | `~/.distill/bin/distill` | The single binary (~58 MB) |
 | `~/.distill/state.json` | Watermark (last date + session UUID, versioned) |
-| `~/.distill/logs/upskill.log` | Tagged trace from every phase (discover, harvest, judge, apply, state) |
+| `~/.distill/logs/upskill.log` | Tagged trace from every phase (discover, harvest, curator, apply, state) |
 | `~/.distill/counter.json` | Tool-call counter for the intra-session trigger |
 | `~/.claude/plugins/cache/distill/...` | Plugin manifest + hooks.json (small, ~2 KB) |
 | `~/.claude/plugins/installed_plugins.json` | distill is listed here as an installed plugin |

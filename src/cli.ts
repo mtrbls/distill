@@ -163,8 +163,8 @@ async function runUpskill(flags: Flags): Promise<number> {
   }
 
   switch (result.verdict.verdict) {
-    case "KEEP":
-    case "MERGE": {
+    case "CREATE":
+    case "UPDATE": {
       // The verdict alone isn't success: writeNewSkill/mergeSkill can
       // fail. skillPath is the proof the file landed on disk.
       if (!result.skillPath) {
@@ -174,7 +174,7 @@ async function runUpskill(flags: Flags): Promise<number> {
         console.log(`              ${result.reason}`);
         return 1;
       }
-      const action = result.verdict.verdict === "KEEP" ? "new skill" : "extended skill";
+      const action = result.verdict.verdict === "CREATE" ? "new skill" : "updated skill";
       console.log(`distill upskill: ${action} '${result.verdict.name}'`);
       console.log(`              ${result.skillPath}`);
       console.log(`              loads automatically in your next Claude Code session`);

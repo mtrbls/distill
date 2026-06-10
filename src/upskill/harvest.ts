@@ -20,7 +20,7 @@ export function extractPairs(args: {
     return all;
   }
 
-  // Char-budget cap, keeping the most recent pairs to fit the judge's
+  // Char-budget cap, keeping the most recent pairs to fit the curator's
   // prompt limit.
   let charCount = 0;
   const capped: Pair[] = [];

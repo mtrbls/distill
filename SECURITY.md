@@ -27,7 +27,7 @@ In scope:
 
 - Code execution vulnerabilities in the binary
 - Plugin registration tampering (writing outside expected paths)
-- Prompt injection vectors in the LLM judge that lead to local file
+- Prompt injection vectors in the LLM curator that lead to local file
   damage or arbitrary command execution
 - Unintended data exfiltration from solo mode (there should be none)
 - SKILL.md parser issues that lead to denial of service or unexpected

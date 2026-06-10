@@ -24,13 +24,13 @@ export function applyVerdict(args: {
     return { skillPath: null, ok: true, reason: verdict.reason ?? "skip" };
   }
 
-  if (verdict.verdict === "KEEP") {
+  if (verdict.verdict === "CREATE") {
     if (!verdict.name || !verdict.body || !verdict.description) {
-      log(`KEEP verdict missing required field(s)`);
+      log(`CREATE verdict missing required field(s)`);
       return {
         skillPath: null,
         ok: false,
-        reason: "KEEP verdict missing name, description, or body",
+        reason: "CREATE verdict missing name, description, or body",
       };
     }
     try {
@@ -56,13 +56,13 @@ export function applyVerdict(args: {
     }
   }
 
-  // MERGE
+  // UPDATE
   if (!verdict.name || !verdict.body) {
-    log(`MERGE verdict missing required field(s)`);
+    log(`UPDATE verdict missing required field(s)`);
     return {
       skillPath: null,
       ok: false,
-      reason: "MERGE verdict missing name or body",
+      reason: "UPDATE verdict missing name or body",
     };
   }
   try {
@@ -80,7 +80,7 @@ export function applyVerdict(args: {
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     if (/does not exist/i.test(msg) && verdict.description) {
-      log(`MERGE target ${verdict.name} missing, falling back to writeNewSkill`);
+      log(`UPDATE target ${verdict.name} missing, falling back to writeNewSkill`);
       try {
         const r = writeNewSkill({
           skillsRoot,
@@ -91,7 +91,7 @@ export function applyVerdict(args: {
           sourceSessions,
           author,
         });
-        log(`wrote new skill (merge fallback) ${verdict.name} → ${r.path}`);
+        log(`wrote new skill (update fallback) ${verdict.name} → ${r.path}`);
         return { skillPath: r.path, ok: true, reason: verdict.reason ?? "" };
       } catch (e2: any) {
         const msg2 = String(e2?.message ?? e2);

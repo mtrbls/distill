@@ -23,12 +23,15 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 - `src/upskill/` directory replaces the monolithic `src/mine.ts`. The
   pipeline is now nine focused modules with an acyclic dependency
-  graph: discover, harvest, prompt, judge, verdict, apply, state,
-  types, index. The judge module is the only dirty boundary
+  graph: discover, harvest, prompt, curator, verdict, apply, state,
+  types, index. The curator module is the only dirty boundary
   (subprocess); prompt and verdict are pure functions reusable by
   the v0.2 eval engine.
+- The LLM decision step is named "curator" (it decides what enters
+  your skill collection) and its verdicts are CREATE (new skill),
+  UPDATE (extend an existing skill), SKIP (nothing new this round).
 - Tagged file logger at `~/.distill/logs/upskill.log` traces every
-  phase (`[discover] found 4 candidates`, `[judge] claude ok`, etc.).
+  phase (`[discover] found 4 candidates`, `[curator] claude ok`, etc.).
   Best-effort, swallows its own errors, never blocks the agent.
 - `state.json` now carries a `version: 1` field. Existing v0.1
   state files without `version` are read as v1 and migrated on the
@@ -55,8 +58,8 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 - Evals for skills: replay engine, drift detection, quality scoring.
   See `INDIVIDUAL.md` in the spec repo for the design.
-- Onboarding probe: forced-KEEP first upskill at install time so the
-  user sees a real skill within minutes of `curl ... | sh`.
+- Onboarding probe: forced-CREATE first upskill at install time so
+  the user sees a real skill within minutes of `curl ... | sh`.
 - `distill enable` / `distill disable` (config flag flip).
 - `distill upgrade` (self-update from GitHub Releases).
 
@@ -64,10 +67,10 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Added
 
-- `distill mine` reads `~/.claude/projects/*.jsonl`, builds a judge
-  prompt that includes existing skills in scope plus recent prompt /
-  response pairs, runs the prompt through `claude -p`, parses a
-  KEEP / MERGE / SKIP verdict, and writes SKILL.md accordingly.
+- `distill mine` reads `~/.claude/projects/*.jsonl`, builds a
+  curation prompt that includes existing skills in scope plus recent
+  prompt / response pairs, runs the prompt through `claude -p`,
+  parses the verdict, and writes SKILL.md accordingly.
 - `distill status` shows mode, storage location, skill counts (mined
   vs other), last mine timestamp, and `git config user.email` identity.
 - `distill install` registers the Claude Code plugin manifest and

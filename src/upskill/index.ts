@@ -1,7 +1,7 @@
 // Orchestrator for the upskill pipeline.
 //
 // Flow:
-//   discover  →  harvest  →  judge  →  apply  →  state advance
+//   discover  →  harvest  →  curate  →  apply  →  state advance
 //
 // Each phase is its own module; this file just coordinates them,
 // times them, returns a UpskillResult, and (best-effort) emits an
@@ -13,9 +13,9 @@ import { createLogger } from "../log.ts";
 import { listExistingSkills, SKILLS_ROOT } from "../skill.ts";
 import { applyVerdict, gitEmailFallback } from "./apply.ts";
 import { resolveTelemetry } from "./config.ts";
+import { runCurator } from "./curator.ts";
 import { findCandidates } from "./discover.ts";
 import { extractPairs } from "./harvest.ts";
-import { runJudge } from "./judge.ts";
 import { buildTrace, type PhaseTrace } from "./payload.ts";
 import { buildPrompt } from "./prompt.ts";
 import { advanceWatermark, readWatermark } from "./state.ts";
@@ -111,7 +111,7 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
     });
   }
 
-  // 3. Prompt + Judge + Verdict
+  // 3. Prompt + Curate + Verdict
   const t2 = Date.now();
   const existing = listExistingSkills(skillsRoot);
   const prompt = buildPrompt({
@@ -126,15 +126,15 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
     attrs: { prompt_chars: prompt.length },
     status: "ok",
   });
-  log(`judge prompt: ${prompt.length} chars`);
+  log(`curator prompt: ${prompt.length} chars`);
 
   const t3 = Date.now();
-  const { stdout, error } = await runJudge({ prompt, config });
+  const { stdout, error } = await runCurator({ prompt, config });
   phases.push({
-    name: "judge",
+    name: "curate",
     durationMs: Date.now() - t3,
     attrs: {
-      judge_latency_ms: Date.now() - t3,
+      curator_latency_ms: Date.now() - t3,
       response_chars: stdout.length,
       error_type: error ? "claude_exit_nonzero" : undefined,
     },
@@ -144,12 +144,12 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   if (error) {
     advanceWatermark(candidates);
     return finish({
-      phase: "judging",
+      phase: "curation",
       scanned: candidates.length,
       pairs: pairs.length,
       verdict: null,
       skillPath: null,
-      reason: `judge failed: ${error.slice(0, 200)}`,
+      reason: `curator failed: ${error.slice(0, 200)}`,
     });
   }
 
@@ -168,12 +168,12 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   if (!verdict) {
     advanceWatermark(candidates);
     return finish({
-      phase: "judging",
+      phase: "curation",
       scanned: candidates.length,
       pairs: pairs.length,
       verdict: null,
       skillPath: null,
-      reason: `verdict unparseable from judge output (${stdout.length} chars)`,
+      reason: `verdict unparseable from curator output (${stdout.length} chars)`,
     });
   }
 

@@ -17,8 +17,12 @@ export interface Pair {
   assistant: string;
 }
 
+// The curator's decision for one upskill run:
+//   CREATE  write a brand-new skill
+//   UPDATE  extend an existing skill with new evidence
+//   SKIP    nothing new this round, no file written
 export interface Verdict {
-  verdict: "KEEP" | "MERGE" | "SKIP";
+  verdict: "CREATE" | "UPDATE" | "SKIP";
   name: string | null;
   description: string | null;
   trigger: string | null;
@@ -29,7 +33,7 @@ export interface Verdict {
 export type Phase =
   | "discovery"
   | "extraction"
-  | "judging"
+  | "curation"
   | "applying"
   | "done";
 
@@ -37,7 +41,7 @@ export interface UpskillConfig {
   sessionsToMine: number;
   maxMsgPerSession: number;
   maxPromptChars: number;
-  judgeTimeoutMs: number;
+  curatorTimeoutMs: number;
   activeSessionGraceMs: number;
 }
 
@@ -45,7 +49,7 @@ export const DEFAULT_CONFIG: UpskillConfig = {
   sessionsToMine: 5,
   maxMsgPerSession: 60,
   maxPromptChars: 60_000,
-  judgeTimeoutMs: 240_000,
+  curatorTimeoutMs: 240_000,
   activeSessionGraceMs: 30_000,
 };
 

@@ -1,8 +1,8 @@
-// The prompt sent TO the judge.
+// The prompt sent TO the curator.
 //
 // Pure function. No I/O, no async, no side effects. Given existing
 // skills, recent activity pairs, and project metadata, returns the
-// string the judge LLM sees.
+// string the curator LLM sees.
 //
 // Reused at v0.2 by the eval engine to build replay prompts.
 
@@ -24,10 +24,10 @@ export function buildPrompt(args: {
           .join("\n");
 
   const existingNames = args.existing.map((s) => s.name);
-  const mergeClause =
+  const updateClause =
     existingNames.length === 0
-      ? "MERGE is FORBIDDEN. There are no existing skills to merge into. Use KEEP or SKIP only."
-      : `MERGE is allowed only if your "name" is EXACTLY one of: [${existingNames.join(", ")}]. Any other name MUST use KEEP, not MERGE.`;
+      ? "UPDATE is FORBIDDEN. There are no existing skills to update. Use CREATE or SKIP only."
+      : `UPDATE is allowed only if your "name" is EXACTLY one of: [${existingNames.join(", ")}]. Any other name MUST use CREATE, not UPDATE.`;
 
   const activity = args.pairs
     .map(
@@ -45,13 +45,13 @@ Recent activity (${args.pairs.length} prompt/response pairs from ${args.sessionU
 ${activity}
 
 Pick one verdict:
-- KEEP   create a new skill from a pattern not already covered
-- MERGE  extend one of the existing skills with new evidence
-- SKIP   nothing in the activity warrants a skill
+- CREATE  write a new skill from a pattern not already covered
+- UPDATE  extend one of the existing skills with new evidence
+- SKIP    nothing in the activity warrants a skill
 
 Rules:
 - Default to SKIP. A skill captures a recurring pattern, not a single observation. Single mistakes are not skills.
-- ${mergeClause}
+- ${updateClause}
 - Skill names are lowercase-kebab-case (e.g., verify-integrations-before-sweep), 1-63 chars.
 - Body style: short sections (When to use / Workflow / Anti-patterns) under 500 words. Match existing-skill style when there is any.
 - Description: a single sentence explaining what the skill is for.
@@ -60,7 +60,7 @@ Rules:
 Output a single JSON object and NOTHING ELSE. No prose, no markdown fence, no preamble.
 
 {
-  "verdict": "KEEP" | "MERGE" | "SKIP",
+  "verdict": "CREATE" | "UPDATE" | "SKIP",
   "name":        "<slug>" | null,
   "description": "<one-line summary>" | null,
   "trigger":     "<one-line trigger>" | null,

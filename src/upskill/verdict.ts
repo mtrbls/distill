@@ -1,8 +1,9 @@
-// The judge's answer.
+// The curator's answer.
 //
-// Pure function. Given whatever the judge LLM emits on stdout (which
-// may include code fences, leading prose, or trailing noise), extract
-// a valid Verdict object, or return null if no valid JSON is present.
+// Pure function. Given whatever the curator LLM emits on stdout
+// (which may include code fences, leading prose, or trailing noise),
+// extract a valid Verdict object, or return null if no valid JSON is
+// present.
 //
 // Reused at v0.2 by the eval engine to parse replay verdicts.
 
@@ -52,7 +53,7 @@ export function parseVerdict(stdout: string): Verdict | null {
   }
 
   const v = parsed.verdict;
-  if (v !== "KEEP" && v !== "MERGE" && v !== "SKIP") {
+  if (v !== "CREATE" && v !== "UPDATE" && v !== "SKIP") {
     log(`invalid verdict field: ${JSON.stringify(v)}`);
     return null;
   }

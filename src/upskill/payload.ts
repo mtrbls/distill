@@ -40,7 +40,7 @@ const SOLO_ATTR_ALLOWLIST = new Set([
   "pairs",
   "char_count",
   "prompt_chars",
-  "judge_latency_ms",
+  "curator_latency_ms",
   "response_chars",
   "parsed",
   "verdict_enum",

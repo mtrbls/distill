@@ -1,8 +1,9 @@
-// The judge itself.
+// The curator.
 //
 // The ONLY dirty boundary in the upskill pipeline: this is where we
-// shell out to `claude -p` and wait for the LLM. Everything else is
-// pure data transformation.
+// shell out to `claude -p` and wait for the LLM that decides what
+// enters the skill collection. Everything else is pure data
+// transformation.
 //
 // Reused at v0.2 by the eval engine to invoke `claude -p` against
 // synthetic replay prompts (and, if/when we add a second LLM backend,
@@ -11,18 +12,18 @@
 import { createLogger } from "../log.ts";
 import type { UpskillConfig } from "./types.ts";
 
-const log = createLogger("judge");
+const log = createLogger("curator");
 
-export interface JudgeResult {
+export interface CuratorResult {
   stdout: string;
   error: string | null;
 }
 
-export async function runJudge(args: {
+export async function runCurator(args: {
   prompt: string;
   config: UpskillConfig;
-}): Promise<JudgeResult> {
-  log(`spawning claude -p (timeout ${args.config.judgeTimeoutMs}ms)`);
+}): Promise<CuratorResult> {
+  log(`spawning claude -p (timeout ${args.config.curatorTimeoutMs}ms)`);
 
   const proc = Bun.spawn(["claude", "-p", args.prompt], {
     stdout: "pipe",
@@ -35,7 +36,7 @@ export async function runJudge(args: {
     } catch {
       // already exited
     }
-  }, args.config.judgeTimeoutMs);
+  }, args.config.curatorTimeoutMs);
 
   try {
     const [stdout, stderr] = await Promise.all([
