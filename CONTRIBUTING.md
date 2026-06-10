@@ -28,12 +28,17 @@ A few things to know before you write code:
 git clone https://github.com/mtrbls/distill.git
 cd distill
 bun src/cli.ts --version             # run from source
-bun src/cli.ts mine                  # mine your real sessions
+bun src/cli.ts upskill               # process your real sessions
+bun test                             # run the test suite
 bun run build                        # produce a binary at dist/distill
 ./dist/distill --version             # verify the binary
 ```
 
-No `bun install` step. There is nothing to install.
+No `bun install` step. There is nothing to install. Tests use
+`bun:test` (built into Bun) and cover the pure modules (verdict,
+prompt, payload scrub) plus skill round-trips and JSONL harvesting
+against temp dirs. The curator subprocess is the one thing without
+unit coverage; it's exercised by the manual smoke test.
 
 ## Building cross-platform binaries
 
@@ -81,6 +86,7 @@ Before opening a PR:
 
 - The change does not add an npm dependency
 - The change does not introduce a network call in solo mode
+- `bun test` passes
 - `bun src/cli.ts --version` still prints
 - `bun run build` still produces a working binary
 - Manual smoke test: `bun src/cli.ts upskill` against your own

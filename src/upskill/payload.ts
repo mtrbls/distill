@@ -121,7 +121,9 @@ function pickPhase(phases: PhaseTrace[], name: string): PhaseTrace | undefined {
   return phases.find((p) => p.name === name);
 }
 
-function scrubAttrs(attrs: Record<string, unknown>): Record<string, unknown> {
+// Exported for tests: the scrub is the privacy boundary, so it gets
+// direct coverage rather than only being exercised through buildTrace.
+export function scrubAttrs(attrs: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(attrs)) {
     if (SOLO_ATTR_ALLOWLIST.has(k)) out[k] = v;

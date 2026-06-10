@@ -53,6 +53,10 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 - `--no-telemetry` global flag (place before or after the command).
 - First-run notice shown once after the first `distill upskill` or
   `distill install`.
+- Test suite (`bun test`, zero added dependencies): 41 tests covering
+  verdict parsing, curator prompt construction, SKILL.md frontmatter
+  round-trips, JSONL pair extraction, and the telemetry scrub
+  allowlist. CI runs them on macOS and Linux.
 
 ### Planned for 0.2.0
 

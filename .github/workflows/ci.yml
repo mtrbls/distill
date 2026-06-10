@@ -25,6 +25,9 @@ jobs:
       - name: Run from source
         run: bun src/cli.ts --version
 
+      - name: Run tests
+        run: bun test
+
       - name: Build binary
         run: bun run build
 
