@@ -26,6 +26,10 @@ export interface ExistingSkill {
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
+export function isValidSkillName(name: string): boolean {
+  return NAME_PATTERN.test(name);
+}
+
 function assertValidName(name: string): void {
   if (!NAME_PATTERN.test(name)) {
     throw new Error(

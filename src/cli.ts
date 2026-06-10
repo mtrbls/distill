@@ -296,7 +296,7 @@ async function runTeam(sub: string, args: string[]): Promise<number> {
         console.error("usage: distill team init <git-url>");
         return 2;
       }
-      const r = teamInit(url, flagValue(args, "--name") ?? undefined);
+      const r = teamInit(url);
       if (!r.ok) {
         console.error(`distill team init: ${r.reason}`);
         return 1;

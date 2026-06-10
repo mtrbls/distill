@@ -83,3 +83,32 @@ describe("assembleIngestRequest", () => {
     }
   });
 });
+
+describe("pickSyncBatch", () => {
+  const { pickSyncBatch } = require("../src/upskill/plouto.ts");
+  const now = 1_000_000_000;
+  const grace = 30_000;
+  const file = (p: string, mtime: number) => ({ p, mtime });
+
+  test("bootstrap (no watermark) takes the newest N, oldest first", () => {
+    const files = Array.from({ length: 30 }, (_, i) => file(`s${i}`, i + 1));
+    const batch = pickSyncBatch(files, 0, now);
+    expect(batch).toHaveLength(20);
+    expect(batch[0]!.p).toBe("s10"); // oldest of the newest 20
+    expect(batch[19]!.p).toBe("s29");
+  });
+
+  test("steady state takes the OLDEST N above the watermark", () => {
+    const files = Array.from({ length: 30 }, (_, i) => file(`s${i}`, 100 + i));
+    const batch = pickSyncBatch(files, 104, now);
+    expect(batch[0]!.p).toBe("s5"); // first above the watermark
+    expect(batch).toHaveLength(20);
+    expect(batch[19]!.p).toBe("s24"); // s25-s29 wait for the next trigger
+  });
+
+  test("excludes files inside the active-session grace window", () => {
+    const files = [file("old", now - grace - 1), file("active", now - 1)];
+    const batch = pickSyncBatch(files, 0, now);
+    expect(batch.map((f: { p: string }) => f.p)).toEqual(["old"]);
+  });
+});

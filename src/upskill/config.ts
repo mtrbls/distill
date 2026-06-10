@@ -26,7 +26,8 @@ export interface TelemetryConfig {
 }
 
 export interface TeamConfig {
-  name: string;
+  id: string; // uuid; the checkout dir name, and the future Plouto workspace mapping hook
+  name: string; // display only, derived from the remote url
   remote: string;
   checkout: string;
   joined_at: string;

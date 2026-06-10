@@ -69,15 +69,9 @@ export async function syncRecent(opts: { sessionsRoot?: string } = {}): Promise<
 
   const root = opts.sessionsRoot ?? SESSIONS_ROOT;
   const since = cfg.plouto.last_synced_at ? Date.parse(cfg.plouto.last_synced_at) : 0;
-  const activeGrace = Date.now() - ACTIVE_SESSION_GRACE_MS;
 
-  // oldest first so the watermark can advance per successful batch
-  const files = listSessionFiles(root, since)
-    .map((p) => ({ p, mtime: mtimeOf(p) }))
-    .filter((f) => f.mtime > since && f.mtime <= activeGrace)
-    .sort((a, b) => b.mtime - a.mtime)
-    .slice(0, SYNC_LIMIT)
-    .reverse();
+  const candidates = listSessionFiles(root, since).map((p) => ({ p, mtime: mtimeOf(p) }));
+  const files = pickSyncBatch(candidates, since, Date.now());
 
   if (files.length === 0) {
     return { ok: true, sessionsSynced: 0, sessionsUpserted: 0, turnsUpserted: 0, reason: "nothing new to sync" };
@@ -177,6 +171,22 @@ function mtimeOf(p: string): number {
   } catch {
     return 0;
   }
+}
+
+// exported for tests. Bootstrap (no watermark yet): the newest N, per
+// the no-bulk-backfill decision. Steady state: the OLDEST N above the
+// watermark, so a backlog catches up across triggers instead of
+// silently dropping whatever didn't fit in one batch.
+export function pickSyncBatch(
+  files: { p: string; mtime: number }[],
+  since: number,
+  nowMs: number,
+): { p: string; mtime: number }[] {
+  const eligible = files
+    .filter((f) => f.mtime > since && f.mtime <= nowMs - ACTIVE_SESSION_GRACE_MS)
+    .sort((a, b) => a.mtime - b.mtime);
+  if (since === 0) return eligible.slice(-SYNC_LIMIT);
+  return eligible.slice(0, SYNC_LIMIT);
 }
 
 // ---------- connect ----------

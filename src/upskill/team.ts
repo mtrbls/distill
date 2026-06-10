@@ -7,17 +7,17 @@
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { createLogger } from "../log.ts";
-import { SKILLS_ROOT } from "../skill.ts";
+import { isValidSkillName, SKILLS_ROOT } from "../skill.ts";
 import { readConfig, setTeam, type TeamConfig } from "./config.ts";
 
 const log = createLogger("team");
@@ -59,35 +59,45 @@ interface Manifest {
   skills: string[];
 }
 
-function readManifest(): Manifest {
-  if (!existsSync(MANIFEST_PATH)) return { team: "", skills: [] };
+// injectable for tests; defaults are the real locations
+export interface TeamPaths {
+  skillsRoot: string;
+  manifestPath: string;
+}
+
+const DEFAULT_PATHS: TeamPaths = {
+  skillsRoot: SKILLS_ROOT,
+  manifestPath: MANIFEST_PATH,
+};
+
+function readManifest(path: string): Manifest {
+  if (!existsSync(path)) return { team: "", skills: [] };
   try {
-    const raw = JSON.parse(readFileSync(MANIFEST_PATH, "utf-8")) as Partial<Manifest>;
+    const raw = JSON.parse(readFileSync(path, "utf-8")) as Partial<Manifest>;
     return { team: raw.team ?? "", skills: Array.isArray(raw.skills) ? raw.skills : [] };
   } catch {
     return { team: "", skills: [] };
   }
 }
 
-function writeManifest(m: Manifest): void {
-  mkdirSync(DISTILL_HOME, { recursive: true });
-  writeFileSync(MANIFEST_PATH, JSON.stringify(m, null, 2) + "\n");
+function writeManifest(m: Manifest, path: string): void {
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, JSON.stringify(m, null, 2) + "\n");
 }
 
 // ---------- init / leave ----------
 
-export function teamInit(gitUrl: string, nameOverride?: string): TeamResult {
+export function teamInit(gitUrl: string): TeamResult {
   const existing = readConfig().team;
   if (existing) {
     return { ok: false, reason: `already on team '${existing.name}' (distill team leave first)` };
   }
 
-  const name = nameOverride ?? deriveTeamName(gitUrl);
-  if (!name) return { ok: false, reason: `could not derive a team name from '${gitUrl}'` };
-  const checkout = join(TEAM_ROOT, name);
-  if (existsSync(checkout)) {
-    return { ok: false, reason: `checkout already exists at ${checkout}` };
-  }
+  // the checkout dir is a uuid: no user input near the filesystem, no
+  // collisions on rejoin, and a ready-made Plouto workspace mapping key
+  const id = crypto.randomUUID();
+  const name = deriveTeamName(gitUrl) ?? "team";
+  const checkout = join(TEAM_ROOT, id);
 
   mkdirSync(TEAM_ROOT, { recursive: true });
   log(`cloning ${gitUrl} -> ${checkout}`);
@@ -97,14 +107,15 @@ export function teamInit(gitUrl: string, nameOverride?: string): TeamResult {
   }
 
   const team: TeamConfig = {
+    id,
     name,
     remote: gitUrl,
     checkout,
     joined_at: new Date().toISOString(),
   };
   setTeam(team);
-  writeManifest({ team: name, skills: [] });
-  log(`joined team '${name}'`);
+  writeManifest({ team: id, skills: [] }, DEFAULT_PATHS.manifestPath);
+  log(`joined team '${name}' (${id})`);
   return { ok: true, reason: "" };
 }
 
@@ -129,6 +140,12 @@ export function deriveTeamName(gitUrl: string): string | null {
 export function teamShare(skillName: string): TeamResult {
   const team = readConfig().team;
   if (!team) return { ok: false, reason: "not on a team (distill team init <git-url>)" };
+
+  // the name lands in path joins and a git commit message; allow only
+  // real skill names
+  if (!isValidSkillName(skillName)) {
+    return { ok: false, reason: `invalid skill name '${skillName}'` };
+  }
 
   const src = join(SKILLS_ROOT, skillName);
   if (!existsSync(join(src, "SKILL.md"))) {
@@ -160,11 +177,11 @@ export function teamShare(skillName: string): TeamResult {
     return { ok: false, reason: `committed locally but push failed: ${push.err.slice(0, 200)}` };
   }
 
-  const manifest = readManifest();
+  const manifest = readManifest(DEFAULT_PATHS.manifestPath);
   if (!manifest.skills.includes(skillName)) {
     manifest.skills.push(skillName);
-    manifest.team = team.name;
-    writeManifest(manifest);
+    manifest.team = team.id;
+    writeManifest(manifest, DEFAULT_PATHS.manifestPath);
   }
   log(`shared ${skillName} (${message})`);
   return { ok: true, reason: message };
@@ -195,27 +212,31 @@ export function teamPull(): PullResult {
   return materialize(team);
 }
 
-function materialize(team: TeamConfig): PullResult {
+// exported for tests (no git involved: reads the checkout dir as-is)
+export function materialize(team: TeamConfig, paths: TeamPaths = DEFAULT_PATHS): PullResult {
   const result: PullResult = { ok: true, reason: "", added: [], updated: [], removed: [], skipped: [] };
-  const manifest = readManifest();
+  const manifest = readManifest(paths.manifestPath);
   const owned = new Set(manifest.skills);
 
-  // skills currently in the repo
+  // skills currently in the repo. lstat on purpose: a symlinked dir or
+  // SKILL.md in a team repo could point anywhere on the local disk,
+  // so symlinks don't materialize, full stop.
   const repoSkills = new Set<string>();
   for (const entry of readdirSync(team.checkout)) {
-    if (entry.startsWith(".")) continue;
+    if (entry.startsWith(".") || !isValidSkillName(entry)) continue;
     const dir = join(team.checkout, entry);
     try {
-      if (!statSync(dir).isDirectory()) continue;
+      if (!lstatSync(dir).isDirectory()) continue;
+      if (!lstatSync(join(dir, "SKILL.md")).isFile()) continue;
     } catch {
       continue;
     }
-    if (existsSync(join(dir, "SKILL.md"))) repoSkills.add(entry);
+    repoSkills.add(entry);
   }
 
   for (const name of repoSkills) {
     const src = join(team.checkout, name);
-    const dest = join(SKILLS_ROOT, name);
+    const dest = join(paths.skillsRoot, name);
     const destExists = existsSync(join(dest, "SKILL.md"));
 
     if (destExists && !owned.has(name)) {
@@ -234,13 +255,13 @@ function materialize(team: TeamConfig): PullResult {
   // team-owned names that left the repo get removed locally
   for (const name of [...owned]) {
     if (repoSkills.has(name)) continue;
-    const dest = join(SKILLS_ROOT, name);
+    const dest = join(paths.skillsRoot, name);
     if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
     owned.delete(name);
     result.removed.push(name);
   }
 
-  writeManifest({ team: team.name, skills: [...owned].sort() });
+  writeManifest({ team: team.id, skills: [...owned].sort() }, paths.manifestPath);
   if (result.added.length || result.updated.length || result.removed.length) {
     log(
       `materialized: +${result.added.length} ~${result.updated.length} -${result.removed.length}` +
