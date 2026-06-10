@@ -128,16 +128,18 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   // NOTE: a separate/global team skills repo may come back later for
   // teams whose skills span many codebases.
   const projectCwd = firstCwd(candidates[0]!.path);
-  const inRepo = !!projectCwd && existsSync(join(projectCwd, ".git"));
-  const targetRoot = inRepo
-    ? join(projectCwd!, ".claude", "skills")
+  // sessions often start in a subdirectory of the repo; walk up to
+  // the root like git does, or the placement leaks to the global dirs
+  const repoRoot = projectCwd ? findRepoRoot(projectCwd) : null;
+  const targetRoot = repoRoot
+    ? join(repoRoot, ".claude", "skills")
     : skillsRoot;
   // the candidate ledger lives next to the skills it feeds: in the
   // repo it is shared via git, so one teammate's sighting plus
   // another's adds up to a promotion
   const candidatesRoot =
     opts.candidatesRoot ??
-    (inRepo ? join(projectCwd!, ".claude", "skill-candidates") : CANDIDATES_ROOT);
+    (repoRoot ? join(repoRoot, ".claude", "skill-candidates") : CANDIDATES_ROOT);
   if (targetRoot !== skillsRoot) log(`target: ${targetRoot} (project-embedded)`);
   const existing = [
     ...listExistingSkills(skillsRoot),
@@ -265,6 +267,18 @@ export type {
   UpskillOptions,
   UpskillResult,
 } from "./types.ts";
+
+// nearest ancestor (including dir itself) containing .git — which may
+// be a directory or, in worktrees/submodules, a file
+export function findRepoRoot(dir: string): string | null {
+  let d = dir;
+  while (true) {
+    if (existsSync(join(d, ".git"))) return d;
+    const parent = join(d, "..");
+    if (parent === d) return null;
+    d = parent;
+  }
+}
 
 function firstCwd(jsonlPath: string): string | null {
   try {

@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findCandidates } from "../src/upskill/discover.ts";
+import { findRepoRoot } from "../src/upskill/index.ts";
 import { DEFAULT_CONFIG } from "../src/upskill/types.ts";
 
 let root: string;
@@ -48,6 +49,20 @@ describe("findCandidates active-session grace", () => {
       triggerPath: trigger,
     });
     expect(found.map((c) => c.sessionUuid)).toEqual(["s1"]);
+  });
+});
+
+describe("findRepoRoot", () => {
+  test("finds the repo root from a nested subdirectory", () => {
+    mkdirSync(join(root, "repo", ".git"), { recursive: true });
+    mkdirSync(join(root, "repo", "packages", "api"), { recursive: true });
+    expect(findRepoRoot(join(root, "repo", "packages", "api"))).toBe(join(root, "repo"));
+    expect(findRepoRoot(join(root, "repo"))).toBe(join(root, "repo"));
+  });
+
+  test("returns null outside any repo", () => {
+    mkdirSync(join(root, "scratch"), { recursive: true });
+    expect(findRepoRoot(join(root, "scratch"))).toBeNull();
   });
 });
 
