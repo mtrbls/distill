@@ -50,3 +50,17 @@ describe("findCandidates active-session grace", () => {
     expect(found.map((c) => c.sessionUuid)).toEqual(["s1"]);
   });
 });
+
+describe("findCandidates curator quarantine", () => {
+  test("never mines the curator's own transcripts", () => {
+    const p = writeSession("-Users-alice--distill-curator", "c1");
+    const found = findCandidates({
+      sessionsRoot: root,
+      watermark: WATERMARK,
+      config: DEFAULT_CONFIG,
+      force: true,
+      triggerPath: p, // even as an explicit trigger
+    });
+    expect(found).toHaveLength(0);
+  });
+});

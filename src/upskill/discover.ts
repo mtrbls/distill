@@ -28,6 +28,9 @@ export function findCandidates(args: {
 
   const candidates: Candidate[] = [];
   for (const projectDir of readdirSync(sessionsRoot)) {
+    // curator transcripts (claude -p spawned from ~/.distill/curator)
+    // are distill's own exhaust, never evidence
+    if (projectDir.endsWith("-distill-curator")) continue;
     const full = join(sessionsRoot, projectDir);
     let s;
     try {
