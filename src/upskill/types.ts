@@ -50,7 +50,7 @@ export const DEFAULT_CONFIG: UpskillConfig = {
   maxMsgPerSession: 60,
   maxPromptChars: 60_000,
   curatorTimeoutMs: 240_000,
-  curatorModel: "sonnet",
+  curatorModel: "haiku",
   activeSessionGraceMs: 30_000,
   candidateExpiryDays: 45,
 };
