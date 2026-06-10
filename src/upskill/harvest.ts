@@ -52,6 +52,10 @@ function extractPairsFromFile(jsonlPath: string, max: number): Pair[] {
     } catch {
       continue;
     }
+    // Sidechain entries are subagent traffic: the "user" there is the
+    // orchestrating agent, not the human. Mixing them in pollutes the
+    // curator's evidence about what the human actually asked for.
+    if (obj.isSidechain === true) continue;
     if (obj.type === "user" || obj.type === "assistant") {
       const text = extractText(obj.message?.content);
       if (text) messages.push({ role: obj.type, text });

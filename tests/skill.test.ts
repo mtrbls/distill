@@ -69,6 +69,21 @@ describe("writeNewSkill", () => {
     }
   });
 
+  test("collapses multiline description and trigger to one line", () => {
+    writeNewSkill({
+      skillsRoot: root,
+      name: "multiline",
+      description: "First line\nsecond line\n  third line  ",
+      trigger: "When this\nhappens",
+      body: "b",
+      sourceSessions: [],
+      author: "a@b.c",
+    });
+    const fm = listExistingSkills(root)[0]!.frontmatter!;
+    expect(fm.description).toBe("First line second line third line");
+    expect(fm.trigger).toBe("When this happens");
+  });
+
   test("quotes description containing a colon so frontmatter survives", () => {
     writeNewSkill({
       skillsRoot: root,

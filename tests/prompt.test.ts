@@ -67,6 +67,22 @@ describe("buildPrompt", () => {
     expect(p).not.toContain("MERGE");
   });
 
+  test("caps the existing-skills section and lists overflow by name only", () => {
+    // 30 skills x ~1500-char bodies = ~45k chars, well past the 24k budget
+    const many = Array.from({ length: 30 }, (_, i) => skill(`skill-${i}`, "z".repeat(1490)));
+    const p = buildPrompt({ project: "Plouto", existing: many, pairs: PAIRS, sessionUuids: ["a"] });
+
+    expect(p).toContain("--- skill: skill-0 ---");
+    expect(p).toContain("bodies omitted for space");
+    expect(p).toContain("skill-29");
+    // the overflow skill's BODY must not appear, only its name
+    const lastBodyStart = p.lastIndexOf("--- skill:");
+    expect(p.slice(0, lastBodyStart).length).toBeLessThan(40_000);
+    // UPDATE constraint still covers every skill, including omitted
+    // ones: skill-29 is last in the list, so it closes the bracket
+    expect(p).toContain("skill-29]");
+  });
+
   test("truncates oversized pair content", () => {
     const huge = "y".repeat(3000);
     const p = buildPrompt({

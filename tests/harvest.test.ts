@@ -63,6 +63,18 @@ describe("extractPairs", () => {
     expect(pairs[0]!.assistant).not.toContain("supersecret");
   });
 
+  test("excludes sidechain (subagent) traffic from the evidence", () => {
+    const c = writeSession("side", [
+      userMsg("real human question"),
+      assistantMsg("real answer"),
+      { ...userMsg("subagent task prompt") as object, isSidechain: true },
+      { ...assistantMsg("subagent reply") as object, isSidechain: true },
+    ]);
+    const pairs = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]!.user).toBe("real human question");
+  });
+
   test("skips non-message lines (snapshots, permission events, blank lines)", () => {
     const c = writeSession("s3", [
       { type: "permission-mode", permissionMode: "auto" },

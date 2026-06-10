@@ -55,6 +55,14 @@ function serializeFrontmatter(fm: SkillFrontmatter): string {
   return lines.join("\n");
 }
 
+// description and trigger must be single-line: the hand-rolled
+// frontmatter parser reads line-by-line, and Claude Code's YAML
+// loader chokes on raw newlines in scalars. The curator is told
+// "one line" but LLMs drift; sanitize at the write boundary.
+function oneLine(s: string): string {
+  return s.replace(/\s*\n\s*/g, " ").trim();
+}
+
 function quoteIfNeeded(s: string): string {
   if (s.includes("\n") || s.includes(":") || s.includes("#") || s.startsWith(" ") || s.endsWith(" ")) {
     return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
@@ -177,8 +185,8 @@ export function writeNewSkill(input: WriteNewSkillInput): { path: string; versio
   const now = new Date().toISOString();
   const fm: SkillFrontmatter = {
     name: input.name,
-    description: input.description,
-    trigger: input.trigger,
+    description: oneLine(input.description),
+    trigger: input.trigger ? oneLine(input.trigger) : undefined,
     author: input.author,
     contributors: [],
     source_sessions: input.sourceSessions,
@@ -222,8 +230,8 @@ export function mergeSkill(input: MergeSkillInput): { path: string; version: num
 
   const next: SkillFrontmatter = {
     ...existing,
-    description: input.description ?? existing.description,
-    trigger: input.trigger ?? existing.trigger,
+    description: input.description ? oneLine(input.description) : existing.description,
+    trigger: input.trigger ? oneLine(input.trigger) : existing.trigger,
     source_sessions: mergedSources,
     contributors,
     version: existing.version + 1,
