@@ -301,3 +301,35 @@ function sameContent(a: string, b: string): boolean {
     return false;
   }
 }
+
+// ---------- bulk share + project bindings ----------
+
+export function teamShareAll(): { shared: string[]; failed: string[] } {
+  const manifest = readManifest(DEFAULT_PATHS.manifestPath);
+  const owned = new Set(manifest.skills);
+  const shared: string[] = [];
+  const failed: string[] = [];
+  for (const entry of readdirSync(DEFAULT_PATHS.skillsRoot)) {
+    if (owned.has(entry) || !isValidSkillName(entry)) continue;
+    if (!existsSync(join(DEFAULT_PATHS.skillsRoot, entry, "SKILL.md"))) continue;
+    const r = teamShare(entry);
+    (r.ok ? shared : failed).push(entry);
+  }
+  return { shared, failed };
+}
+
+// encode a filesystem path the way Claude Code names session dirs
+export function encodeProjectDir(path: string): string {
+  return path.replace(/\/+$/, "").replace(/\//g, "-");
+}
+
+export function teamAddProject(path: string): TeamResult {
+  const cfg = readConfig();
+  if (!cfg.team) return { ok: false, reason: "not on a team" };
+  const enc = encodeProjectDir(path);
+  const projects = cfg.team.projects ?? [];
+  if (!projects.includes(enc)) projects.push(enc);
+  setTeam({ ...cfg.team, projects });
+  log(`project bound: ${path} (${enc})`);
+  return { ok: true, reason: enc };
+}

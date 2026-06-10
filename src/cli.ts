@@ -20,7 +20,7 @@ import {
   disconnect,
   syncRecent,
 } from "./upskill/plouto.ts";
-import { teamInit, teamLeave, teamPull, teamShare } from "./upskill/team.ts";
+import { teamAddProject, teamInit, teamLeave, teamPull, teamShare, teamShareAll } from "./upskill/team.ts";
 import { emitLogs } from "./upskill/telemetry.ts";
 import { listSessionFiles, summarizeUsage } from "./upskill/usage.ts";
 import { VERSION } from "./version.ts";
@@ -44,7 +44,7 @@ COMMANDS
   upskill          Review recent Claude Code sessions for new skills
   usage            Token + tool usage from your local sessions
   status           Show mode, storage, skill counts, last upskill run
-  team <sub>       init <git-url> | share <skill> | pull | leave
+  team <sub>       init <git-url> [--all] | share <skill> | project <path> | pull | leave
   connect          Link this install to your Plouto workspace
   disconnect       Unlink from Plouto (local data stays)
   sync             Push recent session metadata to your workspace
@@ -184,7 +184,9 @@ async function runUpskill(flags: Flags): Promise<number> {
   }
   // on a team, what the curator just mined is shared automatically;
   // hand-written skills still go via `distill team share`
-  if (cfg.team && result.skillPath && result.verdict?.name) {
+  const inScope = !cfg.team?.projects?.length ||
+    (result.dirs ?? []).some((d) => cfg.team!.projects!.includes(d));
+  if (cfg.team && inScope && result.skillPath && result.verdict?.name) {
     const shared = teamShare(result.verdict.name);
     if (!flags.json && shared.ok) {
       console.log(`distill team: shared '${result.verdict.name}' with your team`);
@@ -307,6 +309,11 @@ async function runTeam(sub: string, args: string[]): Promise<number> {
       }
       const pull = teamPull();
       console.log(`distill: joined team`);
+      if (args.includes("--all")) {
+        const all = teamShareAll();
+        if (all.shared.length) console.log(`         shared ${all.shared.length} existing skill(s)`);
+        if (all.failed.length) console.log(`         failed to share: ${all.failed.join(", ")}`);
+      }
       if (pull.added.length > 0) {
         console.log(`         ${pull.added.length} team skill(s) installed: ${pull.added.join(", ")}`);
       }
@@ -345,6 +352,13 @@ async function runTeam(sub: string, args: string[]): Promise<number> {
         console.log(`  skipped: ${s} (you have a local skill with this name)`);
       }
       return 0;
+    }
+    case "project": {
+      const path = args.find((a) => !a.startsWith("--"));
+      if (!path) { console.error("usage: distill team project <path>"); return 2; }
+      const r = teamAddProject(path);
+      console.log(r.ok ? `distill: team now auto-shares skills mined under ${path}` : `distill team project: ${r.reason}`);
+      return r.ok ? 0 : 1;
     }
     case "leave": {
       const r = teamLeave();

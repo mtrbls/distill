@@ -3,6 +3,7 @@
 
 export interface Candidate {
   path: string;
+  dir?: string;
   sessionUuid: string;
   project: string;
   mtimeMs: number;
@@ -64,4 +65,5 @@ export interface UpskillResult {
   verdict: Verdict | null;
   skillPath: string | null;
   reason: string;
+  dirs?: string[];
 }

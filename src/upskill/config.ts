@@ -30,6 +30,7 @@ export interface TeamConfig {
   remote: string;
   checkout: string;
   joined_at: string;
+  projects?: string[]; // encoded session-dir names; empty = share from anywhere
 }
 
 export interface PloutoConfig {

@@ -201,6 +201,7 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
     pairs: pairs.length,
     verdict,
     skillPath: applied.skillPath,
+    dirs: candidates.map((c) => c.dir ?? ""),
     reason: applied.reason || verdict.reason || "",
   });
 }

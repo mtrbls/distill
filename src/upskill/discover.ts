@@ -52,6 +52,7 @@ export function findCandidates(args: {
       const sessionUuid = file.replace(/\.jsonl$/, "");
       candidates.push({
         path: p,
+        dir: projectDir,
         sessionUuid,
         project: deriveProjectName(projectDir),
         mtimeMs: fs.mtimeMs,
