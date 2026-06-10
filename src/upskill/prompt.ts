@@ -63,7 +63,7 @@ Pick one verdict:
 Rules:
 ${args.probe
   ? `- This is a first-run probe: find the SINGLE most valuable pattern in this activity and CREATE a skill for it. A near-miss the user caught, a workflow they repeated, a verification they skipped and regretted. Only SKIP if nothing here would genuinely improve future sessions; a mediocre invented skill is worse than none.`
-  : `- Default to SKIP for routine activity. A CREATE records a dormant candidate, so one clear occurrence of a reusable lesson is enough — but it must be a lesson that would change how a future session behaves. Trivia, one-off facts, and project-specific minutiae are not lessons.`}
+  : `- Default to SKIP for routine activity. A CREATE records a dormant candidate, so one clear occurrence of a reusable lesson is enough — but it must be a lesson that would change how a future session behaves. Skills mined here load for future work on this same project, so project-specific conventions, gotchas, and workflows are squarely in scope; only one-off trivia is not. A lesson does NOT need to apply across projects.`}
 - If the activity matches both a candidate and an active skill, prefer UPDATE.
 - ${promoteClause}
 - ${updateClause}
