@@ -20,7 +20,6 @@ import {
   disconnect,
   syncRecent,
 } from "./upskill/plouto.ts";
-import { teamAddProject, teamInit, teamLeave, teamPull, teamShare, teamShareAll } from "./upskill/team.ts";
 import { emitLogs } from "./upskill/telemetry.ts";
 import { listSessionFiles, summarizeUsage } from "./upskill/usage.ts";
 import { VERSION } from "./version.ts";
@@ -44,7 +43,6 @@ COMMANDS
   upskill          Review recent Claude Code sessions for new skills
   usage            Token + tool usage from your local sessions
   status           Show mode, storage, skill counts, last upskill run
-  team <sub>       init <git-url> [--all] | share <skill> | project <path> | pull | leave
   connect          Link this install to your Plouto workspace
   disconnect       Unlink from Plouto (local data stays)
   sync             Push recent session metadata to your workspace
@@ -114,8 +112,6 @@ async function main(): Promise<number> {
       return runUpskill({ ...flags, json: true });
     case "usage":
       return runUsage(flags, rest);
-    case "team":
-      return runTeam(rest[0] ?? "", rest.slice(1));
     case "sync":
       return runSync(flags);
     case "connect":
@@ -180,23 +176,6 @@ async function runUpskill(flags: Flags): Promise<number> {
     const sync = await syncRecent();
     if (!flags.json && sync.sessionsSynced > 0) {
       console.log(`distill sync: pushed ${sync.sessionsSynced} session(s) to your workspace`);
-    }
-  }
-  // on a team, what the curator just mined is shared automatically;
-  // hand-written skills still go via `distill team share`
-  const inScope = !cfg.team?.projects?.length ||
-    (result.dirs ?? []).some((d) => cfg.team!.projects!.includes(d));
-  if (cfg.team && inScope && result.skillPath && result.verdict?.name) {
-    const shared = teamShare(result.verdict.name);
-    if (!flags.json && shared.ok) {
-      console.log(`distill team: shared '${result.verdict.name}' with your team`);
-    }
-  }
-  // teammates' skills appear between sessions
-  if (cfg.team) {
-    const pull = teamPull();
-    if (!flags.json && pull.added.length > 0) {
-      console.log(`distill team: ${pull.added.length} new team skill(s): ${pull.added.join(", ")}`);
     }
   }
 
@@ -292,83 +271,6 @@ function fmt(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
   if (n >= 1_000) return (n / 1_000).toFixed(1) + "k";
   return String(n);
-}
-
-async function runTeam(sub: string, args: string[]): Promise<number> {
-  switch (sub) {
-    case "init": {
-      const url = args.find((a) => !a.startsWith("--"));
-      if (!url) {
-        console.error("usage: distill team init <git-url>");
-        return 2;
-      }
-      const r = teamInit(url);
-      if (!r.ok) {
-        console.error(`distill team init: ${r.reason}`);
-        return 1;
-      }
-      const pull = teamPull();
-      console.log(`distill: joined team`);
-      if (args.includes("--all")) {
-        const all = teamShareAll();
-        if (all.shared.length) console.log(`         shared ${all.shared.length} existing skill(s)`);
-        if (all.failed.length) console.log(`         failed to share: ${all.failed.join(", ")}`);
-      }
-      if (pull.added.length > 0) {
-        console.log(`         ${pull.added.length} team skill(s) installed: ${pull.added.join(", ")}`);
-      }
-      console.log("         share one of yours with: distill team share <skill>");
-      return 0;
-    }
-    case "share": {
-      const skill = args.find((a) => !a.startsWith("--"));
-      if (!skill) {
-        console.error("usage: distill team share <skill>");
-        return 2;
-      }
-      const r = teamShare(skill);
-      if (!r.ok) {
-        console.error(`distill team share: ${r.reason}`);
-        return 1;
-      }
-      console.log(`distill: shared '${skill}' (${r.reason})`);
-      return 0;
-    }
-    case "pull": {
-      const r = teamPull();
-      if (!r.ok) {
-        console.error(`distill team pull: ${r.reason}`);
-        return 1;
-      }
-      const total = r.added.length + r.updated.length + r.removed.length;
-      if (total === 0) {
-        console.log("distill team pull: up to date");
-      } else {
-        if (r.added.length) console.log(`  added:   ${r.added.join(", ")}`);
-        if (r.updated.length) console.log(`  updated: ${r.updated.join(", ")}`);
-        if (r.removed.length) console.log(`  removed: ${r.removed.join(", ")}`);
-      }
-      for (const s of r.skipped) {
-        console.log(`  skipped: ${s} (you have a local skill with this name)`);
-      }
-      return 0;
-    }
-    case "project": {
-      const path = args.find((a) => !a.startsWith("--"));
-      if (!path) { console.error("usage: distill team project <path>"); return 2; }
-      const r = teamAddProject(path);
-      console.log(r.ok ? `distill: team now auto-shares skills mined under ${path}` : `distill team project: ${r.reason}`);
-      return r.ok ? 0 : 1;
-    }
-    case "leave": {
-      const r = teamLeave();
-      console.log(r.ok ? "distill: left the team. Materialized skills stay in place." : `distill team leave: ${r.reason}`);
-      return r.ok ? 0 : 1;
-    }
-    default:
-      console.error("usage: distill team {init <git-url>|share <skill>|pull|leave}");
-      return 2;
-  }
 }
 
 async function runSync(flags: Flags): Promise<number> {
@@ -492,11 +394,6 @@ async function runStatus(flags: Flags): Promise<number> {
   );
   console.log(`Last run:    ${lastMine ?? "never"}`);
   console.log(`Identity:    ${identity}`);
-  if (cfg.team) {
-    console.log(`Team:        ${cfg.team.name} (${cfg.team.remote})`);
-  } else {
-    console.log(`Team:        none (distill team init <git-url>)`);
-  }
   if (plouto) {
     console.log(`Plouto:      connected (${plouto.apiUrl})`);
     console.log(`Last sync:   ${plouto.lastSyncedAt ?? "never"}`);

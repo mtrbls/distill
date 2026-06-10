@@ -1,5 +1,6 @@
 // discover -> harvest -> curate -> apply -> advance watermark
 
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createLogger } from "../log.ts";
@@ -102,7 +103,21 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
 
   // 3. Prompt + Curate + Verdict
   const t2 = Date.now();
-  const existing = listExistingSkills(skillsRoot);
+  // embedded model: skills mined from a git project land in that
+  // project's .claude/skills/ (committed and reviewed like code, and
+  // teammates receive them through the pull they already do). The
+  // global dir keeps cross-project skills and non-repo work.
+  // NOTE: a separate/global team skills repo may come back later for
+  // teams whose skills span many codebases.
+  const projectCwd = firstCwd(candidates[0]!.path);
+  const targetRoot = projectCwd && existsSync(join(projectCwd, ".git"))
+    ? join(projectCwd, ".claude", "skills")
+    : skillsRoot;
+  if (targetRoot !== skillsRoot) log(`target: ${targetRoot} (project-embedded)`);
+  const existing = [
+    ...listExistingSkills(skillsRoot),
+    ...(targetRoot !== skillsRoot ? listExistingSkills(targetRoot) : []),
+  ];
   const prompt = buildPrompt({
     project: candidates[0]!.project,
     existing,
@@ -169,7 +184,7 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
 
   // 4. Apply
   const t5 = Date.now();
-  const applied = applyVerdict({ verdict, candidates, skillsRoot, author });
+  const applied = applyVerdict({ verdict, candidates, skillsRoot: targetRoot, author });
   phases.push({
     name: "apply",
     durationMs: Date.now() - t5,
@@ -214,3 +229,17 @@ export type {
   UpskillOptions,
   UpskillResult,
 } from "./types.ts";
+
+function firstCwd(jsonlPath: string): string | null {
+  try {
+    const head = readFileSync(jsonlPath, "utf-8").slice(0, 64_000).split("\n");
+    for (const line of head) {
+      if (!line.includes('"cwd"')) continue;
+      try {
+        const cwd = JSON.parse(line).cwd;
+        if (typeof cwd === "string" && cwd.startsWith("/")) return cwd;
+      } catch {}
+    }
+  } catch {}
+  return null;
+}
