@@ -271,20 +271,23 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   });
 }
 
-// The placement anchor is the nearest ancestor with an existing
-// .claude/ — the root the project already chose. Nothing else
-// anchors, by design: a .claude/ dir is the project's opt-in, and
-// distill never invents one in a repo that hasn't opted in (no
-// surprise dirs in checkouts, no accidental candidate commits to
-// other people's projects). $HOME is a CEILING: the walk stops there,
-// so neither ~/.claude (the user-global dir) nor anything above home
-// (/Users/.claude on a shared box would receive every user's mined
-// content) can ever anchor.
+// A project opts in to collecting mined skills by carrying the marker
+// `distill init` creates. The marker is the consent, committed with
+// the repo so it covers the whole team. A bare .claude/ dir is NOT
+// consent — Claude Code creates one for settings the moment anyone
+// approves a permission, which says nothing about wanting generated
+// artifacts in git history.
+export const PROJECT_MARKER = join(".claude", "distill.json");
+
+// The placement anchor is the nearest ancestor carrying the marker.
+// $HOME is a CEILING: the walk stops there, so neither ~/.claude (the
+// user-global dir) nor anything above home (/Users/.claude on a
+// shared box would receive every user's mined content) can anchor.
 export function findProjectRoot(dir: string, home: string = homedir()): string | null {
   let d = dir;
   while (true) {
     if (d === home) return null;
-    if (existsSync(join(d, ".claude"))) return d;
+    if (existsSync(join(d, PROJECT_MARKER))) return d;
     const parent = join(d, "..");
     if (parent === d) return null;
     d = parent;

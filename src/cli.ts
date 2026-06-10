@@ -12,7 +12,7 @@ import {
   resolveTelemetry,
   setTelemetryEnabled,
 } from "./upskill/config.ts";
-import { upskill } from "./upskill/index.ts";
+import { findProjectRoot, PROJECT_MARKER, upskill } from "./upskill/index.ts";
 import { buildTestRecord } from "./upskill/payload.ts";
 import {
   connectViaBrowser,
@@ -41,6 +41,7 @@ USAGE
   distill <command> [options]
 
 COMMANDS
+  init             Opt this project in: mined skills land in its .claude/
   upskill          Review recent Claude Code sessions for new skills
   usage            Token + tool usage from your local sessions
   status           Show mode, storage, skill counts, last upskill run
@@ -105,6 +106,8 @@ async function main(): Promise<number> {
     case "--version":
       console.log(VERSION);
       return 0;
+    case "init":
+      return runInit();
     case "upskill":
       return runUpskill(flags);
     case "probe":
@@ -162,6 +165,28 @@ function flagValue(args: string[], name: string): string | null {
   if (i === -1 || i + 1 >= args.length) return null;
   const v = args[i + 1]!;
   return v.startsWith("--") ? null : v;
+}
+
+async function runInit(): Promise<number> {
+  const root = process.cwd();
+  if (root === homedir()) {
+    console.error("distill init: home is the global scope already; run this inside a project");
+    return 2;
+  }
+  const marker = join(root, PROJECT_MARKER);
+  if (existsSync(marker)) {
+    console.log(`distill: already initialized (${marker})`);
+    return 0;
+  }
+  mkdirSync(join(root, ".claude"), { recursive: true });
+  writeFileSync(marker, JSON.stringify({ version: 1 }, null, 2) + "\n");
+  console.log(`distill: this project now collects mined skills`);
+  console.log(`         marker:     ${marker}`);
+  console.log(`         skills:     ${join(root, ".claude", "skills")}`);
+  console.log(`         candidates: ${join(root, ".claude", "skill-candidates")}`);
+  console.log("");
+  console.log("Commit the marker so your team's distill collects here too.");
+  return 0;
 }
 
 async function runUpskill(flags: Flags, triggerTranscript?: string): Promise<number> {
@@ -364,10 +389,12 @@ async function runStatus(flags: Flags): Promise<number> {
   const skills = listExistingSkills();
   const minedSkills = skills.filter((s) => s.frontmatter?.created_by === "distill");
   const untrackedSkills = skills.length - minedSkills.length;
-  const projectCandidatesDir = join(process.cwd(), ".claude", "skill-candidates");
+  // same resolution upskill uses, so status agrees with placement
+  // even when run from a subdirectory
+  const projectRoot = findProjectRoot(process.cwd());
   const candidateCount =
     listCandidates().length +
-    (existsSync(projectCandidatesDir) ? listCandidates(projectCandidatesDir).length : 0);
+    (projectRoot ? listCandidates(join(projectRoot, ".claude", "skill-candidates")).length : 0);
 
   let lastMine: string | null = null;
   if (existsSync(STATE_PATH)) {

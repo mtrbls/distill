@@ -52,36 +52,43 @@ describe("findCandidates active-session grace", () => {
   });
 });
 
+function markProject(dir: string): void {
+  mkdirSync(join(dir, ".claude"), { recursive: true });
+  writeFileSync(join(dir, ".claude", "distill.json"), '{ "version": 1 }\n');
+}
+
 describe("findProjectRoot", () => {
-  test("anchors at the nearest .claude dir, from any depth", () => {
-    mkdirSync(join(root, "ws", ".claude"), { recursive: true });
+  test("anchors at the nearest distill marker, from any depth", () => {
+    markProject(join(root, "ws"));
     mkdirSync(join(root, "ws", "packages", "api"), { recursive: true });
     expect(findProjectRoot(join(root, "ws", "packages", "api"))).toBe(join(root, "ws"));
     expect(findProjectRoot(join(root, "ws"))).toBe(join(root, "ws"));
   });
 
-  test("a git repo without .claude does NOT anchor — projects opt in", () => {
-    mkdirSync(join(root, "repo", ".git"), { recursive: true });
+  test("a bare .claude dir is NOT consent — only the marker anchors", () => {
+    // .claude exists because someone approved a permission once
+    mkdirSync(join(root, "repo", ".claude"), { recursive: true });
+    writeFileSync(join(root, "repo", ".claude", "settings.local.json"), "{}\n");
     mkdirSync(join(root, "repo", "src"), { recursive: true });
     expect(findProjectRoot(join(root, "repo", "src"))).toBeNull();
   });
 
-  test("a subproject's own .claude wins over one further up", () => {
-    mkdirSync(join(root, "mono", ".claude"), { recursive: true });
-    mkdirSync(join(root, "mono", "svc", ".claude"), { recursive: true });
+  test("a subproject's own marker wins over one further up", () => {
+    markProject(join(root, "mono"));
+    markProject(join(root, "mono", "svc"));
     mkdirSync(join(root, "mono", "svc", "src"), { recursive: true });
     expect(findProjectRoot(join(root, "mono", "svc", "src"))).toBe(join(root, "mono", "svc"));
   });
 
   test("$HOME never anchors", () => {
-    mkdirSync(join(root, "home", ".claude"), { recursive: true });
+    markProject(join(root, "home"));
     mkdirSync(join(root, "home", "scratch"), { recursive: true });
     expect(findProjectRoot(join(root, "home", "scratch"), join(root, "home"))).toBeNull();
   });
 
   test("$HOME is a ceiling: ancestors of home never anchor either", () => {
-    // .claude ABOVE home (e.g. /Users/.claude on a shared machine)
-    mkdirSync(join(root, ".claude"), { recursive: true });
+    // marker ABOVE home (e.g. /Users/.claude on a shared machine)
+    markProject(root);
     mkdirSync(join(root, "home", "scratch"), { recursive: true });
     expect(findProjectRoot(join(root, "home", "scratch"), join(root, "home"))).toBeNull();
   });

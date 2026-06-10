@@ -33,13 +33,15 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Fixed (mining pipeline)
 
-- Placement anchors to the nearest existing `.claude/` directory
-  above the session's cwd, and nothing else (`$HOME` never anchors).
-  The `.claude/` folder is the project's opt-in: distill never
-  invents one in a repo that hasn't opted in. Sessions started in
-  subdirectories anchor correctly, a subproject's own `.claude/` is
-  respected, and evidence spanning multiple projects places globally
-  rather than into either project's git history.
+- **`distill init`** opts a project in: it writes a
+  `.claude/distill.json` marker (commit it to cover the whole team).
+  Placement anchors to the nearest ancestor carrying the marker, and
+  nothing else — a bare `.claude/` dir is not consent, since Claude
+  Code creates one for settings the moment anyone uses it. `$HOME` is
+  a hard ceiling for the walk. Sessions started in subdirectories
+  anchor correctly, a subproject's own marker is respected, and
+  evidence spanning multiple projects places globally rather than
+  into either project's git history.
 
 - Hooks read Claude Code's stdin payload and pass `transcript_path`
   to the worker; the triggering session is exempt from the
