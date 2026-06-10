@@ -31,6 +31,13 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 - The install-time probe still creates a live skill directly: its
   purpose is a loadable skill minutes after install.
 
+### Added
+
+- `skill-builder` starter skill: teaches the house SKILL.md format
+  (trigger-first, kebab name, When to use / Workflow / Anti-patterns,
+  under 500 words) whenever the user asks Claude to hand-write a
+  skill. Keeps hand-written and mined skills consistent.
+
 ### Fixed (mining pipeline)
 
 - Placement anchors to the git repo the work happened in: the walk

@@ -27,6 +27,29 @@ Before sweeping changes that point code at an external destination: calendar slu
 - Skipping the post-change spot check`,
   },
   {
+    name: "skill-builder",
+    description:
+      "Write a well-formed SKILL.md when asked to capture a lesson, convention, or workflow as a reusable skill",
+    trigger: "Asked to create, write, or improve a Claude Code skill",
+    body: `## When to use
+Any request to turn a lesson, convention, or workflow into a SKILL.md — or to improve an existing one.
+
+## Workflow
+1. Name the trigger first: one sentence describing the SITUATION that should activate the skill. If you cannot name the situation, it is not a skill yet.
+2. Name the skill in lowercase-kebab-case stating the lesson as an action (verify-x-before-y), 1-63 chars.
+3. Frontmatter: one-line description (what it is for) and the trigger (when it fires). The description is what the model reads when deciding relevance — write it for that decision.
+4. Body under 500 words, three sections: When to use / Workflow / Anti-patterns. Numbered, concrete steps that change behavior; cut anything the reader would do anyway.
+5. One skill = one lesson. Two lessons = two skills.
+6. Check the existing library before writing: extend a matching skill instead of creating a near-duplicate.
+7. Placement: project-specific lessons go to the repo's .claude/skills/<name>/SKILL.md; cross-project lessons to ~/.claude/skills/.
+
+## Anti-patterns
+- Generic best practices ("write tests", "handle errors"): they cost context in every session and change nothing.
+- Vague triggers ("when coding"): the skill fires never, or always.
+- Narrating the incident that taught the lesson instead of instructing the next session.
+- Bodies over 500 words: a skill is a checklist, not documentation.`,
+  },
+  {
     name: "run-it-before-claiming-done",
     description:
       "Run the code, test, or page that changed and observe the behavior before reporting a task as complete",
