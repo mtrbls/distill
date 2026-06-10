@@ -7,7 +7,7 @@ import { createLogger } from "../log.ts";
 import { listExistingSkills, SKILLS_ROOT } from "../skill.ts";
 import { applyVerdict, gitEmailFallback } from "./apply.ts";
 import { CANDIDATES_ROOT, expireCandidates, listCandidates } from "./candidates.ts";
-import { resolveTelemetry } from "./config.ts";
+import { readConfig, resolveTelemetry } from "./config.ts";
 import { runCurator } from "./curator.ts";
 import { findCandidates } from "./discover.ts";
 import { extractPairs } from "./harvest.ts";
@@ -132,10 +132,11 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   // spans projects, and writing it into either ledger could leak one
   // project's lessons into another's git history: fall back to the
   // global dirs, which are private to this machine.
+  const collectRoots = readConfig().collect_roots;
   const roots = new Set<string>();
   for (const c of candidates) {
     for (const cwd of sessionCwds(c.path)) {
-      const r = findProjectRoot(cwd);
+      const r = resolveAnchor(cwd, collectRoots);
       if (r) roots.add(r);
     }
   }
@@ -292,6 +293,39 @@ export function findProjectRoot(dir: string, home: string = homedir()): string |
     if (parent === d) return null;
     d = parent;
   }
+}
+
+// Personal opt-in: `distill collect <dir>` declares "projects under
+// here are mine, collect there". Inside a collect root the git
+// toplevel is the project boundary; consent already happened at
+// config time, so no per-repo marker is needed. The walk never
+// leaves the collect root and still respects the $HOME ceiling.
+export function findCollectAnchor(
+  dir: string,
+  collectRoots: string[],
+  home: string = homedir(),
+): string | null {
+  const root = collectRoots.find((r) => dir === r || dir.startsWith(r + "/"));
+  if (!root) return null;
+  let d = dir;
+  while (true) {
+    if (d === home) return null;
+    if (existsSync(join(d, ".git"))) return d;
+    if (d === root) return null; // boundary: nothing above the collect root
+    const parent = join(d, "..");
+    if (parent === d) return null;
+    d = parent;
+  }
+}
+
+// marker (team consent, committed) wins over collect root (personal
+// consent, configured); neither -> global placement
+export function resolveAnchor(
+  dir: string,
+  collectRoots: string[],
+  home: string = homedir(),
+): string | null {
+  return findProjectRoot(dir, home) ?? findCollectAnchor(dir, collectRoots, home);
 }
 
 // every distinct cwd the transcript recorded; sessions can change

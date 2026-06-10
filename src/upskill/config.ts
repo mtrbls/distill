@@ -45,6 +45,9 @@ export interface DistillConfig {
   telemetry: TelemetryConfig;
   team: TeamConfig | null;
   plouto: PloutoConfig | null;
+  // personal opt-in: projects under these dirs collect mined skills
+  // without needing a per-repo marker
+  collect_roots: string[];
 }
 
 export interface TelemetryDecision {
@@ -74,6 +77,7 @@ function defaults(): DistillConfig {
     },
     team: null,
     plouto: null,
+    collect_roots: [],
   };
 }
 
@@ -98,6 +102,9 @@ export function readConfig(): DistillConfig {
       },
       team: raw.team ?? null,
       plouto: raw.plouto ?? null,
+      collect_roots: Array.isArray(raw.collect_roots)
+        ? raw.collect_roots.filter((r): r is string => typeof r === "string")
+        : [],
     };
   } catch (e) {
     log(`failed to read ${CONFIG_PATH}: ${(e as Error).message}, using defaults`);
@@ -124,6 +131,12 @@ export function writeConfig(cfg: DistillConfig): void {
 export function setPloutoConnection(p: PloutoConfig | null): void {
   const cfg = readConfig();
   cfg.plouto = p;
+  writeConfig(cfg);
+}
+
+export function setCollectRoots(roots: string[]): void {
+  const cfg = readConfig();
+  cfg.collect_roots = roots;
   writeConfig(cfg);
 }
 

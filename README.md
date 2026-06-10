@@ -19,10 +19,12 @@ automatically in your next session.
 The analysis runs through your own `claude` CLI, on your existing
 subscription. Nothing leaves your machine.
 
-Run `distill init` once in a project to collect skills there: they
-land in that project's `.claude/skills/`. Without it, everything goes
-to `~/.claude/skills/`. The marker it writes is the opt-in — distill
-never writes into a repo that didn't ask.
+Run `distill collect ~/w` once and every git project under `~/w`
+collects skills into its own `.claude/skills/`. For a single project
+(or a whole team), `distill init` in the repo writes a committable
+marker instead. Without either opt-in, everything goes to
+`~/.claude/skills/` — distill never writes into a repo that didn't
+ask.
 
 A pattern seen once becomes a *candidate* in `.claude/skill-candidates/`
 (dormant, never loaded, zero cost). When the pattern shows up again —
@@ -43,7 +45,8 @@ You rarely need any of these. The background loop does the work.
 
 | Command | What it does |
 |---|---|
-| `distill init` | Opt this project in: mined skills land in its `.claude/` |
+| `distill collect <dir>` | Opt in every project under a dir (yours, not your clones) |
+| `distill init` | Opt one project in via a committable marker (team opt-in) |
 | `distill upskill` | Run an analysis pass now |
 | `distill usage` | Token and tool usage from your local sessions |
 | `distill status` | What distill knows: skills, last run, connection |

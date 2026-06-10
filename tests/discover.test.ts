@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findCandidates } from "../src/upskill/discover.ts";
-import { findProjectRoot } from "../src/upskill/index.ts";
+import { findCollectAnchor, findProjectRoot, resolveAnchor } from "../src/upskill/index.ts";
 import { DEFAULT_CONFIG } from "../src/upskill/types.ts";
 
 let root: string;
@@ -96,6 +96,42 @@ describe("findProjectRoot", () => {
   test("returns null outside any project", () => {
     mkdirSync(join(root, "scratch"), { recursive: true });
     expect(findProjectRoot(join(root, "scratch"))).toBeNull();
+  });
+});
+
+describe("findCollectAnchor", () => {
+  test("inside a collect root, the git toplevel anchors", () => {
+    mkdirSync(join(root, "w", "proj", ".git"), { recursive: true });
+    mkdirSync(join(root, "w", "proj", "src"), { recursive: true });
+    expect(findCollectAnchor(join(root, "w", "proj", "src"), [join(root, "w")]))
+      .toBe(join(root, "w", "proj"));
+  });
+
+  test("inside a collect root but outside any repo: no anchor", () => {
+    mkdirSync(join(root, "w", "notes"), { recursive: true });
+    expect(findCollectAnchor(join(root, "w", "notes"), [join(root, "w")])).toBeNull();
+  });
+
+  test("outside every collect root: no anchor", () => {
+    mkdirSync(join(root, "elsewhere", "proj", ".git"), { recursive: true });
+    expect(findCollectAnchor(join(root, "elsewhere", "proj"), [join(root, "w")])).toBeNull();
+  });
+
+  test("never anchors above the collect root", () => {
+    // repo ABOVE the collect root must not capture work under it
+    mkdirSync(join(root, ".git"), { recursive: true });
+    mkdirSync(join(root, "w", "notes"), { recursive: true });
+    expect(findCollectAnchor(join(root, "w", "notes"), [join(root, "w")])).toBeNull();
+  });
+});
+
+describe("resolveAnchor", () => {
+  test("a committed marker wins over the collect-root git boundary", () => {
+    mkdirSync(join(root, "w", "proj", ".git"), { recursive: true });
+    markProject(join(root, "w", "proj", "svc"));
+    mkdirSync(join(root, "w", "proj", "svc", "src"), { recursive: true });
+    expect(resolveAnchor(join(root, "w", "proj", "svc", "src"), [join(root, "w")]))
+      .toBe(join(root, "w", "proj", "svc"));
   });
 });
 

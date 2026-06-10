@@ -10,9 +10,10 @@ import {
   readConfig,
   resetInstallId,
   resolveTelemetry,
+  setCollectRoots,
   setTelemetryEnabled,
 } from "./upskill/config.ts";
-import { findProjectRoot, PROJECT_MARKER, upskill } from "./upskill/index.ts";
+import { PROJECT_MARKER, resolveAnchor, upskill } from "./upskill/index.ts";
 import { buildTestRecord } from "./upskill/payload.ts";
 import {
   connectViaBrowser,
@@ -42,6 +43,7 @@ USAGE
 
 COMMANDS
   init             Opt this project in: mined skills land in its .claude/
+  collect [dir]    Opt in everything under a dir (list roots when no arg)
   upskill          Review recent Claude Code sessions for new skills
   usage            Token + tool usage from your local sessions
   status           Show mode, storage, skill counts, last upskill run
@@ -108,6 +110,8 @@ async function main(): Promise<number> {
       return 0;
     case "init":
       return runInit();
+    case "collect":
+      return runCollect(rest);
     case "upskill":
       return runUpskill(flags);
     case "probe":
@@ -186,6 +190,50 @@ async function runInit(): Promise<number> {
   console.log(`         candidates: ${join(root, ".claude", "skill-candidates")}`);
   console.log("");
   console.log("Commit the marker so your team's distill collects here too.");
+  return 0;
+}
+
+async function runCollect(args: string[]): Promise<number> {
+  const remove = args.includes("--remove");
+  const target = args.find((a) => !a.startsWith("-"));
+  const cfg = readConfig();
+
+  if (!target) {
+    if (cfg.collect_roots.length === 0) {
+      console.log("distill collect: no roots configured");
+      console.log("  distill collect ~/w     projects under ~/w collect mined skills");
+    } else {
+      for (const r of cfg.collect_roots) console.log(r);
+    }
+    return 0;
+  }
+
+  const abs = resolve(target);
+  if (abs === homedir()) {
+    console.error(
+      "distill collect: refusing your whole home directory — that would include every checkout you ever clone. Pick the dir that holds YOUR projects.",
+    );
+    return 2;
+  }
+
+  if (remove) {
+    if (!cfg.collect_roots.includes(abs)) {
+      console.log(`distill collect: ${abs} is not configured`);
+      return 0;
+    }
+    setCollectRoots(cfg.collect_roots.filter((r) => r !== abs));
+    console.log(`distill: stopped collecting under ${abs}`);
+    return 0;
+  }
+
+  if (cfg.collect_roots.includes(abs)) {
+    console.log(`distill collect: already collecting under ${abs}`);
+    return 0;
+  }
+  setCollectRoots([...cfg.collect_roots, abs]);
+  console.log(`distill: projects under ${abs} now collect mined skills`);
+  console.log(`         boundary: each project's git root, .claude/skills + .claude/skill-candidates`);
+  console.log(`         a committed ${PROJECT_MARKER} marker still takes precedence`);
   return 0;
 }
 
@@ -386,12 +434,13 @@ async function runProbe(flags: Flags): Promise<number> {
 }
 
 async function runStatus(flags: Flags): Promise<number> {
+  const cfg = readConfig();
   const skills = listExistingSkills();
   const minedSkills = skills.filter((s) => s.frontmatter?.created_by === "distill");
   const untrackedSkills = skills.length - minedSkills.length;
   // same resolution upskill uses, so status agrees with placement
   // even when run from a subdirectory
-  const projectRoot = findProjectRoot(process.cwd());
+  const projectRoot = resolveAnchor(process.cwd(), cfg.collect_roots);
   const candidateCount =
     listCandidates().length +
     (projectRoot ? listCandidates(join(projectRoot, ".claude", "skill-candidates")).length : 0);
@@ -407,7 +456,6 @@ async function runStatus(flags: Flags): Promise<number> {
   }
 
   const identity = await gitEmail();
-  const cfg = readConfig();
   const plouto = cfg.plouto
     ? { apiUrl: cfg.plouto.api_url, lastSyncedAt: cfg.plouto.last_synced_at }
     : null;

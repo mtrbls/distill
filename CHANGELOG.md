@@ -33,8 +33,13 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Fixed (mining pipeline)
 
+- **`distill collect <dir>`** opts in every git project under a dir
+  at once (personal, stored in `~/.distill/config.json`; the git
+  toplevel is the project boundary). Refuses `$HOME` itself — that
+  would include every checkout you ever clone.
 - **`distill init`** opts a project in: it writes a
   `.claude/distill.json` marker (commit it to cover the whole team).
+  The marker takes precedence over collect roots.
   Placement anchors to the nearest ancestor carrying the marker, and
   nothing else — a bare `.claude/` dir is not consent, since Claude
   Code creates one for settings the moment anyone uses it. `$HOME` is
