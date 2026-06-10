@@ -22,6 +22,11 @@ subscription. Nothing leaves your machine.
 Skills mined from work in a git project land in that project's
 `.claude/skills/`. Everything else goes to `~/.claude/skills/`.
 
+A pattern seen once becomes a *candidate* in `.claude/skill-candidates/`
+(dormant, never loaded, zero cost). When the pattern shows up again —
+in your work or a teammate's — the candidate is promoted to a real
+skill. Candidates that never recur quietly expire.
+
 ## Teams
 
 No setup. When a skill lands in your project repo, commit it like any

@@ -9,15 +9,19 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 ### Added (candidate skill tier)
 
 - New skills are no longer created directly. A first occurrence of a
-  pattern now writes a **candidate** to `~/.distill/candidates/` —
-  dormant, never loaded by Claude Code, costing nothing. When a later
-  pass sees the pattern recur, the new `PROMOTE` verdict activates the
-  candidate into the live skills directory with a body merged from
-  both occurrences. This moves recurrence detection from "two
-  occurrences inside one curator prompt" to "a match against a
-  persistent ledger", which works across sessions and across days.
-- Candidates that never recur are archived (not deleted) to
-  `~/.distill/candidates-archive/` after 45 days
+  pattern now writes a **candidate** — dormant, never loaded by
+  Claude Code, costing nothing. When a later pass sees the pattern
+  recur, the new `PROMOTE` verdict activates the candidate into the
+  live skills directory with a body merged from both occurrences.
+  This moves recurrence detection from "two occurrences inside one
+  curator prompt" to "a match against a persistent ledger", which
+  works across sessions, across days, and across teammates.
+- Candidates from git-project work live in that project's
+  `.claude/skill-candidates/` and travel through git like skills do:
+  one teammate's sighting plus another's adds up to a promotion.
+  Non-repo work uses `~/.distill/candidates/`.
+- Candidates that never recur are archived (not deleted) to a
+  sibling `…-archive/` directory after 45 days
   (`candidateExpiryDays`).
 - A re-CREATE of an existing candidate name counts as a
   re-observation and merges into the candidate.

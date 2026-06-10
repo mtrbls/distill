@@ -364,7 +364,10 @@ async function runStatus(flags: Flags): Promise<number> {
   const skills = listExistingSkills();
   const minedSkills = skills.filter((s) => s.frontmatter?.created_by === "distill");
   const untrackedSkills = skills.length - minedSkills.length;
-  const candidateCount = listCandidates().length;
+  const projectCandidatesDir = join(process.cwd(), ".claude", "skill-candidates");
+  const candidateCount =
+    listCandidates().length +
+    (existsSync(projectCandidatesDir) ? listCandidates(projectCandidatesDir).length : 0);
 
   let lastMine: string | null = null;
   if (existsSync(STATE_PATH)) {
