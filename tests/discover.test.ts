@@ -79,6 +79,13 @@ describe("findProjectRoot", () => {
     expect(findProjectRoot(join(root, "home", "scratch"), join(root, "home"))).toBeNull();
   });
 
+  test("$HOME is a ceiling: ancestors of home never anchor either", () => {
+    // .claude ABOVE home (e.g. /Users/.claude on a shared machine)
+    mkdirSync(join(root, ".claude"), { recursive: true });
+    mkdirSync(join(root, "home", "scratch"), { recursive: true });
+    expect(findProjectRoot(join(root, "home", "scratch"), join(root, "home"))).toBeNull();
+  });
+
   test("returns null outside any project", () => {
     mkdirSync(join(root, "scratch"), { recursive: true });
     expect(findProjectRoot(join(root, "scratch"))).toBeNull();

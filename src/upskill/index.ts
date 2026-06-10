@@ -276,12 +276,15 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
 // anchors, by design: a .claude/ dir is the project's opt-in, and
 // distill never invents one in a repo that hasn't opted in (no
 // surprise dirs in checkouts, no accidental candidate commits to
-// other people's projects). $HOME never anchors — ~/.claude is the
-// user-global dir, not a project marker.
+// other people's projects). $HOME is a CEILING: the walk stops there,
+// so neither ~/.claude (the user-global dir) nor anything above home
+// (/Users/.claude on a shared box would receive every user's mined
+// content) can ever anchor.
 export function findProjectRoot(dir: string, home: string = homedir()): string | null {
   let d = dir;
   while (true) {
-    if (d !== home && existsSync(join(d, ".claude"))) return d;
+    if (d === home) return null;
+    if (existsSync(join(d, ".claude"))) return d;
     const parent = join(d, "..");
     if (parent === d) return null;
     d = parent;
