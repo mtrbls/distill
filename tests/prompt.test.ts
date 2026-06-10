@@ -15,7 +15,25 @@ describe("buildPrompt", () => {
   test("forbids UPDATE when there are no existing skills", () => {
     const p = buildPrompt({ project: "demo-app", existing: [], pairs: PAIRS, sessionUuids: ["a"] });
     expect(p).toContain("UPDATE is FORBIDDEN");
-    expect(p).toContain("(no existing skills in this scope)");
+    expect(p).toContain("(none)");
+  });
+
+  test("forbids PROMOTE when there are no candidates", () => {
+    const p = buildPrompt({ project: "demo-app", existing: [], pairs: PAIRS, sessionUuids: ["a"] });
+    expect(p).toContain("PROMOTE is FORBIDDEN");
+  });
+
+  test("constrains PROMOTE to the exact candidate names", () => {
+    const p = buildPrompt({
+      project: "demo-app",
+      existing: [],
+      candidates: [skill("watch-the-dlq"), skill("pin-sdk-versions")],
+      pairs: PAIRS,
+      sessionUuids: ["a"],
+    });
+    expect(p).toContain("PROMOTE is allowed only if");
+    expect(p).toContain("[watch-the-dlq, pin-sdk-versions]");
+    expect(p).toContain("--- skill: watch-the-dlq ---");
   });
 
   test("constrains UPDATE to the exact existing skill names", () => {
@@ -61,7 +79,7 @@ describe("buildPrompt", () => {
 
   test("instructs the new verdict vocabulary, not the retired one", () => {
     const p = buildPrompt({ project: "demo-app", existing: [], pairs: PAIRS, sessionUuids: ["a"] });
-    expect(p).toContain('"verdict": "CREATE" | "UPDATE" | "SKIP"');
+    expect(p).toContain('"verdict": "CREATE" | "UPDATE" | "PROMOTE" | "SKIP"');
     expect(p).toContain("Default to SKIP");
     expect(p).not.toContain("KEEP");
     expect(p).not.toContain("MERGE");

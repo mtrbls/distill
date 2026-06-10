@@ -58,7 +58,7 @@ export function parseVerdict(stdout: string): Verdict | null {
   }
 
   const v = parsed.verdict;
-  if (v !== "CREATE" && v !== "UPDATE" && v !== "SKIP") {
+  if (v !== "CREATE" && v !== "UPDATE" && v !== "PROMOTE" && v !== "SKIP") {
     log(`invalid verdict field: ${JSON.stringify(v)}`);
     return null;
   }

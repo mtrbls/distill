@@ -6,6 +6,27 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Added (candidate skill tier)
+
+- New skills are no longer created directly. A first occurrence of a
+  pattern now writes a **candidate** to `~/.distill/candidates/` —
+  dormant, never loaded by Claude Code, costing nothing. When a later
+  pass sees the pattern recur, the new `PROMOTE` verdict activates the
+  candidate into the live skills directory with a body merged from
+  both occurrences. This moves recurrence detection from "two
+  occurrences inside one curator prompt" to "a match against a
+  persistent ledger", which works across sessions and across days.
+- Candidates that never recur are archived (not deleted) to
+  `~/.distill/candidates-archive/` after 45 days
+  (`candidateExpiryDays`).
+- A re-CREATE of an existing candidate name counts as a
+  re-observation and merges into the candidate.
+- `distill status` shows the pending-candidate count; `--json` gains
+  `skills.candidates`. Upskill output distinguishes "new candidate"
+  (dormant) from "promoted skill" (active).
+- The install-time probe still creates a live skill directly: its
+  purpose is a loadable skill minutes after install.
+
 ### Changed (breaking)
 
 - The `mine` subcommand is now `upskill`. `distill mine` returns an

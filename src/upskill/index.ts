@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { createLogger } from "../log.ts";
 import { listExistingSkills, SKILLS_ROOT } from "../skill.ts";
 import { applyVerdict, gitEmailFallback } from "./apply.ts";
+import { CANDIDATES_ROOT, expireCandidates, listCandidates } from "./candidates.ts";
 import { resolveTelemetry } from "./config.ts";
 import { runCurator } from "./curator.ts";
 import { findCandidates } from "./discover.ts";
@@ -28,6 +29,7 @@ const SESSIONS_ROOT = join(homedir(), ".claude", "projects");
 export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult> {
   const sessionsRoot = opts.sessionsRoot ?? SESSIONS_ROOT;
   const skillsRoot = opts.skillsRoot ?? SKILLS_ROOT;
+  const candidatesRoot = opts.candidatesRoot ?? CANDIDATES_ROOT;
   const config = { ...DEFAULT_CONFIG, ...opts.config };
   const force = !!opts.force;
   const author = opts.author ?? gitEmailFallback();
@@ -129,9 +131,12 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
     ...listExistingSkills(skillsRoot),
     ...(targetRoot !== skillsRoot ? listExistingSkills(targetRoot) : []),
   ];
+  expireCandidates({ root: candidatesRoot, maxAgeDays: config.candidateExpiryDays });
+  const candidateSkills = listCandidates(candidatesRoot);
   const prompt = buildPrompt({
     project: candidates[0]!.project,
     existing,
+    candidates: candidateSkills,
     pairs,
     sessionUuids: candidates.map((c) => c.sessionUuid),
     probe: opts.probe,
@@ -195,7 +200,14 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
 
   // 4. Apply
   const t5 = Date.now();
-  const applied = applyVerdict({ verdict, candidates, skillsRoot: targetRoot, author });
+  const applied = applyVerdict({
+    verdict,
+    candidates,
+    skillsRoot: targetRoot,
+    candidatesRoot,
+    author,
+    probe: opts.probe,
+  });
   phases.push({
     name: "apply",
     durationMs: Date.now() - t5,
@@ -227,6 +239,7 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
     pairs: pairs.length,
     verdict,
     skillPath: applied.skillPath,
+    tier: applied.tier,
     dirs: candidates.map((c) => c.dir ?? ""),
     reason: applied.reason || verdict.reason || "",
   });

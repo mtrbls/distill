@@ -14,10 +14,11 @@ export interface Pair {
   assistant: string;
 }
 
-// CREATE = new skill, UPDATE = extend an existing one, SKIP = nothing
-// worth saving this round
+// CREATE = new candidate (dormant until the pattern recurs),
+// PROMOTE = a candidate's pattern recurred, activate it,
+// UPDATE = extend an active skill, SKIP = nothing worth saving
 export interface Verdict {
-  verdict: "CREATE" | "UPDATE" | "SKIP";
+  verdict: "CREATE" | "UPDATE" | "PROMOTE" | "SKIP";
   name: string | null;
   description: string | null;
   trigger: string | null;
@@ -38,6 +39,7 @@ export interface UpskillConfig {
   maxPromptChars: number;
   curatorTimeoutMs: number;
   activeSessionGraceMs: number;
+  candidateExpiryDays: number;
 }
 
 export const DEFAULT_CONFIG: UpskillConfig = {
@@ -46,11 +48,13 @@ export const DEFAULT_CONFIG: UpskillConfig = {
   maxPromptChars: 60_000,
   curatorTimeoutMs: 240_000,
   activeSessionGraceMs: 30_000,
+  candidateExpiryDays: 45,
 };
 
 export interface UpskillOptions {
   sessionsRoot?: string;
   skillsRoot?: string;
+  candidatesRoot?: string;
   config?: Partial<UpskillConfig>;
   force?: boolean;
   author?: string;
@@ -64,6 +68,8 @@ export interface UpskillResult {
   pairs: number;
   verdict: Verdict | null;
   skillPath: string | null;
+  // candidate = written dormant, active = loaded by Claude Code
+  tier?: "candidate" | "active";
   reason: string;
   dirs?: string[];
 }

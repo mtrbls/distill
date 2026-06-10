@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { installPlugin, isInstalled, uninstallPlugin } from "./plugin.ts";
 import { listExistingSkills, SKILLS_ROOT } from "./skill.ts";
+import { listCandidates } from "./upskill/candidates.ts";
 import { installStarterSkills } from "./starter.ts";
 import {
   readConfig,
@@ -197,7 +198,8 @@ async function runUpskill(flags: Flags): Promise<number> {
 
   switch (result.verdict.verdict) {
     case "CREATE":
-    case "UPDATE": {
+    case "UPDATE":
+    case "PROMOTE": {
       // skillPath is the proof the write actually happened
       if (!result.skillPath) {
         console.log(
@@ -206,10 +208,18 @@ async function runUpskill(flags: Flags): Promise<number> {
         console.log(`              ${result.reason}`);
         return 1;
       }
-      const action = result.verdict.verdict === "CREATE" ? "new skill" : "updated skill";
+      const v = result.verdict.verdict;
+      const action =
+        v === "UPDATE" ? "updated skill"
+        : v === "PROMOTE" ? "promoted skill"
+        : result.tier === "candidate" ? "new candidate" : "new skill";
       console.log(`distill upskill: ${action} '${result.verdict.name}'`);
       console.log(`              ${result.skillPath}`);
-      console.log(`              loads automatically in your next Claude Code session`);
+      if (result.tier === "candidate") {
+        console.log(`              dormant; activates when the pattern recurs`);
+      } else {
+        console.log(`              loads automatically in your next Claude Code session`);
+      }
       if (result.verdict.reason) console.log(`              reason: ${result.verdict.reason}`);
       return 0;
     }
@@ -350,6 +360,7 @@ async function runStatus(flags: Flags): Promise<number> {
   const skills = listExistingSkills();
   const minedSkills = skills.filter((s) => s.frontmatter?.created_by === "distill");
   const untrackedSkills = skills.length - minedSkills.length;
+  const candidateCount = listCandidates().length;
 
   let lastMine: string | null = null;
   if (existsSync(STATE_PATH)) {
@@ -373,7 +384,7 @@ async function runStatus(flags: Flags): Promise<number> {
         {
           mode: cfg.team ? "team" : "solo",
           storage: SKILLS_ROOT,
-          skills: { mined: minedSkills.length, untracked: untrackedSkills },
+          skills: { mined: minedSkills.length, untracked: untrackedSkills, candidates: candidateCount },
           lastMine,
           identity,
           plouto,
@@ -390,7 +401,7 @@ async function runStatus(flags: Flags): Promise<number> {
   console.log(`Mode:        ${cfg.team ? "team" : "solo"} (local-first)`);
   console.log(`Storage:     ${SKILLS_ROOT}`);
   console.log(
-    `Skills:      ${minedSkills.length} mined by distill, ${untrackedSkills} other`,
+    `Skills:      ${minedSkills.length} mined by distill, ${untrackedSkills} other, ${candidateCount} candidate(s) pending recurrence`,
   );
   console.log(`Last run:    ${lastMine ?? "never"}`);
   console.log(`Identity:    ${identity}`);

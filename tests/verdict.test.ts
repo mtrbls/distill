@@ -19,8 +19,9 @@ describe("parseVerdict", () => {
     expect(v!.body).toContain("When to use");
   });
 
-  test("parses UPDATE and SKIP verdict tokens", () => {
+  test("parses UPDATE, PROMOTE, and SKIP verdict tokens", () => {
     expect(parseVerdict('{"verdict":"UPDATE","name":"x","body":"b"}')!.verdict).toBe("UPDATE");
+    expect(parseVerdict('{"verdict":"PROMOTE","name":"x","body":"b"}')!.verdict).toBe("PROMOTE");
     expect(parseVerdict('{"verdict":"SKIP","reason":"nothing new"}')!.verdict).toBe("SKIP");
   });
 
