@@ -58,6 +58,23 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   round-trips, JSONL pair extraction, and the telemetry scrub
   allowlist. CI runs them on macOS and Linux.
 
+### Added (usage + Plouto sync)
+
+- `distill usage`: local token + tool usage report from your session
+  files. Tokens by model (input/output/cache read+write), top tools,
+  MCP rollup, skills invoked. `--days N`, `--json`. Works offline.
+- `distill connect` / `disconnect`: link the install to a Plouto
+  workspace via browser sign-in (or `--token` for headless). Config
+  file is chmod 600 once it holds a credential.
+- `distill sync`: incremental push of session metadata to Plouto's
+  existing `/api/ingest/sessions` endpoint. Watermark-based (recent
+  sessions only, no bulk backfill), chunked under the server's 2 MB
+  body cap, watermark advances only on success. Connected installs
+  also sync automatically after each upskill pass (Stop hook).
+- `src/upskill/usage.ts`: metadata extractor, a TypeScript port of
+  Plouto's extractor whitelist. Tool names yes, tool inputs never;
+  counts and enums, never content.
+
 ### Planned for 0.2.0
 
 - Evals for skills: replay engine, drift detection, quality scoring.

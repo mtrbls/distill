@@ -67,6 +67,18 @@ distill telemetry endpoint <your-collector>      # ship to your own OTEL collect
 The `DO_NOT_TRACK=1` env var is honored unconditionally per the
 [Do Not Track](https://consoledonottrack.com/) convention.
 
+### Connected (opt-in via `distill connect`): session metadata
+
+Linking your install to a Plouto workspace (free for solo) syncs
+session **metadata** after each Claude Code session ends: session IDs,
+working directory, git branch, timestamps, per-turn token counts by
+model, tool **names**, and your git email for attribution. Never
+prompt text, never tool inputs or outputs, never file content. This
+is what powers the plouto.ai dashboard (cost by model, usage trends,
+session history).
+
+`distill disconnect` stops it instantly; nothing local is removed.
+
 ### Team mode (consented at `distill team init`): full row capture
 
 If you opt into team mode for cross-machine skill sharing, distill
@@ -81,7 +93,11 @@ anytime with `distill team leave`.
 |---|---|
 | `distill upskill` | Review recent sessions for a new skill (one-off) |
 | `distill upskill --force` | Ignore the watermark and rescan recent sessions |
-| `distill status` | Show mode, storage, skill counts, last run, identity |
+| `distill usage` | Local token + tool usage report (`--days N`, `--json`) |
+| `distill connect` | Link this install to your Plouto workspace (browser sign-in, or `--token`) |
+| `distill sync` | Push recent session metadata to your workspace now |
+| `distill disconnect` | Unlink from Plouto; local data stays |
+| `distill status` | Show mode, storage, skill counts, last run, identity, connection |
 | `distill install` | Register the Claude Code plugin (run automatically by `install.sh`) |
 | `distill uninstall` | Remove the plugin registration (skills are preserved) |
 | `distill telemetry <sub>` | `status` / `on` / `off` / `endpoint <url>` / `reset-install-id` / `test` |

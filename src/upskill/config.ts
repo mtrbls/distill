@@ -3,7 +3,7 @@
 // Endpoint precedence:
 //   OTEL_EXPORTER_OTLP_ENDPOINT > override > team endpoint > default
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createLogger } from "../log.ts";
@@ -32,11 +32,19 @@ export interface TeamConfig {
   otel_endpoint: string;
 }
 
+export interface PloutoConfig {
+  api_url: string;
+  token: string;
+  connected_at: string;
+  last_synced_at: string | null;
+}
+
 export interface DistillConfig {
   version: number;
   telemetry: TelemetryConfig;
   mode: "solo" | "team";
   team: TeamConfig | null;
+  plouto: PloutoConfig | null;
 }
 
 export interface TelemetryDecision {
@@ -67,6 +75,7 @@ function defaults(): DistillConfig {
     },
     mode: "solo",
     team: null,
+    plouto: null,
   };
 }
 
@@ -94,6 +103,7 @@ export function readConfig(): DistillConfig {
       },
       mode: raw.mode === "team" ? "team" : "solo",
       team: raw.team ?? null,
+      plouto: raw.plouto ?? null,
     };
   } catch (e) {
     log(`failed to read ${CONFIG_PATH}: ${(e as Error).message}, using defaults`);
@@ -104,13 +114,30 @@ export function readConfig(): DistillConfig {
 export function writeConfig(cfg: DistillConfig): void {
   try {
     mkdirSync(DISTILL_HOME, { recursive: true });
+    // config can hold a bearer token, keep it user-only. The mode
+    // option only applies on create, so chmod the existing file too.
     writeFileSync(
       CONFIG_PATH,
       JSON.stringify({ ...cfg, version: CURRENT_VERSION }, null, 2) + "\n",
+      { mode: 0o600 },
     );
+    chmodSync(CONFIG_PATH, 0o600);
   } catch (e) {
     log(`failed to write ${CONFIG_PATH}: ${(e as Error).message}`);
   }
+}
+
+export function setPloutoConnection(p: PloutoConfig | null): void {
+  const cfg = readConfig();
+  cfg.plouto = p;
+  writeConfig(cfg);
+}
+
+export function advanceSyncWatermark(lastSyncedAt: string): void {
+  const cfg = readConfig();
+  if (!cfg.plouto) return;
+  cfg.plouto.last_synced_at = lastSyncedAt;
+  writeConfig(cfg);
 }
 
 // ---------- opt-out / endpoint resolution ----------

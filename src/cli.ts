@@ -14,7 +14,15 @@ import {
 } from "./upskill/config.ts";
 import { upskill } from "./upskill/index.ts";
 import { buildTestTrace } from "./upskill/payload.ts";
+import {
+  connectViaBrowser,
+  connectWithToken,
+  DEFAULT_PLOUTO_API,
+  disconnect,
+  syncRecent,
+} from "./upskill/plouto.ts";
 import { emitTrace } from "./upskill/telemetry.ts";
+import { listSessionFiles, summarizeUsage } from "./upskill/usage.ts";
 import { VERSION } from "./version.ts";
 
 const DISTILL_HOME = join(homedir(), ".distill");
@@ -32,7 +40,11 @@ USAGE
 
 COMMANDS
   upskill          Review recent Claude Code sessions for new skills
+  usage            Token + tool usage from your local sessions
   status           Show mode, storage, skill counts, last upskill run
+  connect          Link this install to your Plouto workspace
+  disconnect       Unlink from Plouto (local data stays)
+  sync             Push recent session metadata to your workspace
   install          Register the Claude Code plugin (hooks + manifest)
   uninstall        Remove the Claude Code plugin registration
   telemetry <sub>  status | on | off | endpoint <url> | reset-install-id | test
@@ -44,6 +56,9 @@ COMMANDS
 
 OPTIONS
   --force          upskill: ignore watermark, rescan recent sessions
+  --days <n>       usage: window size (default 30)
+  --token <t>      connect: skip the browser, use this token
+  --api-url <u>    connect: target API (default ${DEFAULT_PLOUTO_API})
   --json           emit machine-readable JSON output
   --no-telemetry   disable telemetry for this command invocation
   -h, --help       show this message
@@ -94,6 +109,14 @@ async function main(): Promise<number> {
       return runUpskill(flags);
     case "_upskill":
       return runUpskill({ ...flags, json: true });
+    case "usage":
+      return runUsage(flags, rest);
+    case "sync":
+      return runSync(flags);
+    case "connect":
+      return runConnect(rest);
+    case "disconnect":
+      return runDisconnect();
     case "status":
       return runStatus(flags);
     case "hook":
@@ -134,6 +157,13 @@ function parseFlags(args: string[]): Flags {
   return f;
 }
 
+function flagValue(args: string[], name: string): string | null {
+  const i = args.indexOf(name);
+  if (i === -1 || i + 1 >= args.length) return null;
+  const v = args[i + 1]!;
+  return v.startsWith("--") ? null : v;
+}
+
 async function runUpskill(flags: Flags): Promise<number> {
   const startedAt = new Date().toISOString();
   if (!flags.json) {
@@ -143,6 +173,14 @@ async function runUpskill(flags: Flags): Promise<number> {
     console.log("distill upskill: scanning recent Claude Code sessions...");
   }
   const result = await upskill({ force: flags.force, noTelemetry: flags.noTelemetry });
+
+  // connected installs push session metadata after each pass
+  if (readConfig().plouto?.token) {
+    const sync = await syncRecent();
+    if (!flags.json && sync.sessionsSynced > 0) {
+      console.log(`distill sync: pushed ${sync.sessionsSynced} session(s) to your workspace`);
+    }
+  }
 
   if (flags.json) {
     console.log(JSON.stringify({ startedAt, ...result }, null, 2));
@@ -185,6 +223,109 @@ async function runUpskill(flags: Flags): Promise<number> {
   }
 }
 
+async function runUsage(flags: Flags, args: string[]): Promise<number> {
+  const days = Number(flagValue(args, "--days")) || 30;
+  const sessionsRoot = join(homedir(), ".claude", "projects");
+  const since = Date.now() - days * 24 * 60 * 60 * 1000;
+  const files = listSessionFiles(sessionsRoot, since);
+  const summary = summarizeUsage(files);
+
+  if (flags.json) {
+    console.log(JSON.stringify({ days, ...summary }, null, 2));
+    return 0;
+  }
+
+  console.log(`distill usage: last ${days} days, ${summary.sessions} session(s)\n`);
+
+  const models = Object.entries(summary.models).sort(
+    (a, b) => b[1].outputTokens - a[1].outputTokens,
+  );
+  if (models.length === 0) {
+    console.log("No assistant activity found in this window.");
+    return 0;
+  }
+
+  console.log("Tokens by model:");
+  for (const [model, m] of models) {
+    console.log(`  ${model}`);
+    console.log(
+      `    in ${fmt(m.inputTokens)}  out ${fmt(m.outputTokens)}  cache-read ${fmt(m.cacheReadTokens)}  cache-write ${fmt(m.cacheCreationTokens)}  (${m.messages} messages)`,
+    );
+  }
+
+  const tools = Object.entries(summary.tools).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  if (tools.length > 0) {
+    console.log("\nTop tools:");
+    for (const [name, count] of tools) console.log(`  ${String(count).padStart(6)}  ${name}`);
+    if (summary.mcpToolCalls > 0) {
+      console.log(`  ${String(summary.mcpToolCalls).padStart(6)}  (mcp tools)`);
+    }
+  }
+
+  const skills = Object.entries(summary.skillsInvoked).sort((a, b) => b[1] - a[1]);
+  if (skills.length > 0) {
+    console.log("\nSkills invoked:");
+    for (const [name, count] of skills) console.log(`  ${String(count).padStart(6)}  ${name}`);
+  }
+  return 0;
+}
+
+function fmt(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "k";
+  return String(n);
+}
+
+async function runSync(flags: Flags): Promise<number> {
+  const result = await syncRecent();
+  if (flags.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return result.ok ? 0 : 1;
+  }
+  if (!result.ok) {
+    console.log(`distill sync: failed (${result.reason})`);
+    if (result.reason === "not connected") {
+      console.log("           run `distill connect` first");
+    }
+    return 1;
+  }
+  if (result.sessionsSynced === 0) {
+    console.log(`distill sync: ${result.reason}`);
+    return 0;
+  }
+  console.log(
+    `distill sync: ${result.sessionsSynced} session(s) pushed, server upserted ${result.sessionsUpserted} sessions / ${result.turnsUpserted} turns`,
+  );
+  return 0;
+}
+
+async function runConnect(args: string[]): Promise<number> {
+  const apiUrl = flagValue(args, "--api-url") ?? DEFAULT_PLOUTO_API;
+  const token = flagValue(args, "--token");
+
+  const result = token
+    ? connectWithToken(token, apiUrl)
+    : await connectViaBrowser(apiUrl);
+
+  if (!result.ok) {
+    console.error(`distill connect: ${result.reason}`);
+    return 1;
+  }
+  console.log(`distill: connected to ${result.apiUrl}`);
+  console.log("         recent sessions will sync after each Claude Code session ends.");
+  console.log("         run `distill sync` to push now, `distill disconnect` to unlink.");
+  return 0;
+}
+
+async function runDisconnect(): Promise<number> {
+  if (disconnect()) {
+    console.log("distill: disconnected from Plouto. Local skills and data are untouched.");
+  } else {
+    console.log("distill: not connected, nothing to do");
+  }
+  return 0;
+}
+
 async function runStatus(flags: Flags): Promise<number> {
   const skills = listExistingSkills();
   const minedSkills = skills.filter((s) => s.frontmatter?.created_by === "distill");
@@ -201,16 +342,21 @@ async function runStatus(flags: Flags): Promise<number> {
   }
 
   const identity = await gitEmail();
+  const cfg = readConfig();
+  const plouto = cfg.plouto
+    ? { apiUrl: cfg.plouto.api_url, lastSyncedAt: cfg.plouto.last_synced_at }
+    : null;
 
   if (flags.json) {
     console.log(
       JSON.stringify(
         {
-          mode: "individual",
+          mode: cfg.mode,
           storage: SKILLS_ROOT,
           skills: { mined: minedSkills.length, untracked: untrackedSkills },
           lastMine,
           identity,
+          plouto,
           version: VERSION,
         },
         null,
@@ -221,13 +367,19 @@ async function runStatus(flags: Flags): Promise<number> {
   }
 
   console.log(`distill ${VERSION}\n`);
-  console.log(`Mode:        individual (local-only)`);
+  console.log(`Mode:        ${cfg.mode} (local-first)`);
   console.log(`Storage:     ${SKILLS_ROOT}`);
   console.log(
     `Skills:      ${minedSkills.length} mined by distill, ${untrackedSkills} other`,
   );
   console.log(`Last run:    ${lastMine ?? "never"}`);
   console.log(`Identity:    ${identity}`);
+  if (plouto) {
+    console.log(`Plouto:      connected (${plouto.apiUrl})`);
+    console.log(`Last sync:   ${plouto.lastSyncedAt ?? "never"}`);
+  } else {
+    console.log(`Plouto:      not connected (distill connect)`);
+  }
   return 0;
 }
 
