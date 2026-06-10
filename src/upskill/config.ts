@@ -26,10 +26,10 @@ export interface TelemetryConfig {
 }
 
 export interface TeamConfig {
-  id: string;
   name: string;
-  git_remote: string;
-  otel_endpoint: string;
+  remote: string;
+  checkout: string;
+  joined_at: string;
 }
 
 export interface PloutoConfig {
@@ -133,6 +133,12 @@ export function setPloutoConnection(p: PloutoConfig | null): void {
   writeConfig(cfg);
 }
 
+export function setTeam(t: TeamConfig | null): void {
+  const cfg = readConfig();
+  cfg.team = t;
+  writeConfig(cfg);
+}
+
 export function advanceSyncWatermark(lastSyncedAt: string): void {
   const cfg = readConfig();
   if (!cfg.plouto) return;
@@ -160,9 +166,8 @@ export function resolveTelemetry(args: { noTelemetryFlag?: boolean } = {}): Tele
   const endpoint =
     (envEndpoint && envEndpoint.length > 0)
       ? envEndpoint
-      : cfg.telemetry.endpoint_override
-        ?? (cfg.mode === "team" && cfg.team ? cfg.team.otel_endpoint : DEFAULT_OTEL_ENDPOINT);
-  return { emit: true, endpoint, reason: `enabled (mode=${cfg.mode})` };
+      : cfg.telemetry.endpoint_override ?? DEFAULT_OTEL_ENDPOINT;
+  return { emit: true, endpoint, reason: "enabled" };
 }
 
 // ---------- setters used by `distill telemetry` subcommand ----------

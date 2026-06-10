@@ -67,6 +67,23 @@ distill telemetry endpoint <your-collector>      # ship to your own OTEL collect
 The `DO_NOT_TRACK=1` env var is honored unconditionally per the
 [Do Not Track](https://consoledonottrack.com/) convention.
 
+## Team skills
+
+Sharing skills with a team requires exactly one thing: a git repo
+everyone can push to. No accounts, no backend, no capture, free.
+
+```sh
+distill team init git@github.com:org/skills.git
+distill team share verify-integrations-before-sweep
+```
+
+The repo holds flat `<skill>/SKILL.md` dirs. distill clones it under
+`~/.distill/team/` and materializes skills into `~/.claude/skills/`
+on every pull (automatic after each session), so teammates' skills
+just appear. Your own local skill always wins a name collision.
+Review-before-merge is repo policy (protected branch + PRs) if your
+team wants it.
+
 ### Connected (opt-in via `distill connect`): session metadata
 
 Linking your install to a Plouto workspace (free for solo) syncs
@@ -94,6 +111,10 @@ anytime with `distill team leave`.
 | `distill upskill` | Review recent sessions for a new skill (one-off) |
 | `distill upskill --force` | Ignore the watermark and rescan recent sessions |
 | `distill usage` | Local token + tool usage report (`--days N`, `--json`) |
+| `distill team init <git-url>` | Join a team skills repo (any git remote, your existing git auth) |
+| `distill team share <skill>` | Publish one of your skills to the team repo |
+| `distill team pull` | Fetch teammates' skills now (also runs automatically after sessions) |
+| `distill team leave` | Unlink; materialized skills stay |
 | `distill connect` | Link this install to your Plouto workspace (browser sign-in, or `--token`) |
 | `distill sync` | Push recent session metadata to your workspace now |
 | `distill disconnect` | Unlink from Plouto; local data stays |

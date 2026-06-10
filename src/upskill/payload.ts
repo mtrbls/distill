@@ -1,6 +1,6 @@
-// Builds the OTLP payload. Solo mode scrubs every span against an
-// allowlist at the emission boundary; team mode (consented) passes
-// bodies through.
+// Builds the OTLP payload. Every span is scrubbed against an
+// allowlist at the emission boundary; counts, durations, and enums
+// only, regardless of mode.
 
 import { VERSION } from "../version.ts";
 import { readConfig } from "./config.ts";
@@ -18,11 +18,9 @@ export interface PhaseTrace {
   durationMs: number;
   attrs: Record<string, unknown>;
   status: "ok" | "error";
-  bodies?: Record<string, unknown>; // team mode only
 }
 
-// Anything not listed here gets dropped in solo mode, root span
-// included.
+// Anything not listed here gets dropped, root span included.
 const SOLO_ATTR_ALLOWLIST = new Set([
   // phase span attrs
   "scanned",
@@ -71,7 +69,7 @@ export function buildTrace(args: {
     spanId: rootSpanId,
     startUnixNano: msToUnixNano(args.startedAtMs),
     endUnixNano: msToUnixNano(args.startedAtMs + args.durationMs),
-    attributes: mode === "solo" ? scrubAttrs(rootAttrs) : rootAttrs,
+    attributes: scrubAttrs(rootAttrs),
     status: args.phases.some((p) => p.status === "error") ? "error" : "ok",
   };
 
@@ -82,23 +80,20 @@ export function buildTrace(args: {
     const end = cursorMs + p.durationMs;
     cursorMs = end;
 
-    const baseAttrs = mode === "solo" ? scrubAttrs(p.attrs) : p.attrs;
-    const teamAttrs = mode === "team" && p.bodies ? { ...baseAttrs, ...p.bodies } : baseAttrs;
-
     phaseSpans.push({
       name: p.name,
       spanId: newSpanId(),
       parentSpanId: rootSpanId,
       startUnixNano: msToUnixNano(start),
       endUnixNano: msToUnixNano(end),
-      attributes: teamAttrs,
+      attributes: scrubAttrs(p.attrs),
       status: p.status,
     });
   }
 
   return {
     traceId,
-    resource: buildResource(cfg.telemetry.install_id, mode, cfg.team?.id),
+    resource: buildResource(cfg.telemetry.install_id, mode),
     scope: { name: "distill", version: VERSION },
     spans: [rootSpan, ...phaseSpans],
   };
@@ -117,12 +112,8 @@ export function scrubAttrs(attrs: Record<string, unknown>): Record<string, unkno
   return out;
 }
 
-function buildResource(
-  installId: string,
-  mode: "solo" | "team",
-  teamId: string | undefined,
-): Record<string, unknown> {
-  const r: Record<string, unknown> = {
+function buildResource(installId: string, mode: "solo" | "team"): Record<string, unknown> {
+  return {
     "service.name": "distill",
     "service.version": VERSION,
     "process.runtime.name": "bun",
@@ -132,10 +123,6 @@ function buildResource(
     "distill.install_id": installId,
     "distill.mode": mode,
   };
-  if (mode === "team" && teamId) {
-    r["distill.team.id"] = teamId;
-  }
-  return r;
 }
 
 // ---------- minimal trace for `distill telemetry test` ----------
@@ -147,7 +134,7 @@ export function buildTestTrace(): TraceData {
   const now = Date.now();
   return {
     traceId,
-    resource: buildResource(cfg.telemetry.install_id, cfg.mode, cfg.team?.id),
+    resource: buildResource(cfg.telemetry.install_id, cfg.mode),
     scope: { name: "distill", version: VERSION },
     spans: [
       {

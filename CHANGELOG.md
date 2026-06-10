@@ -58,6 +58,22 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   round-trips, JSONL pair extraction, and the telemetry scrub
   allowlist. CI runs them on macOS and Linux.
 
+### Added (team skills over git)
+
+- `distill team init <git-url>` / `share <skill>` / `pull` / `leave`.
+  Team skill sharing needs only a git repo; auth is the user's
+  existing git credentials. The checkout lives in `~/.distill/team/`
+  and skills materialize flat into `~/.claude/skills/` on pull
+  (Claude Code's loader and the curator both see them). A manifest
+  tracks team-owned names: repo updates overwrite them, repo
+  deletions remove them, and a local skill that isn't team-owned is
+  never overwritten on a name collision. The Stop-hook worker pulls
+  automatically, so teammates' skills appear between sessions.
+- Level-4 content capture is retired. The telemetry scrub allowlist
+  now applies to every span unconditionally; team membership changes
+  nothing about telemetry. The Plouto analytics tier (`distill
+  connect`) stays metadata-only and per-user.
+
 ### Added (usage + Plouto sync)
 
 - `distill usage`: local token + tool usage report from your session
