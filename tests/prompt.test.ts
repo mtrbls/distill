@@ -14,13 +14,13 @@ function skill(name: string, body = "## When to use\nExample."): ExistingSkill {
 describe("buildPrompt", () => {
   test("forbids UPDATE when there are no existing skills", () => {
     const p = buildPrompt({ project: "demo-app", existing: [], pairs: PAIRS, sessionUuids: ["a"] });
-    expect(p).toContain("UPDATE is FORBIDDEN");
+    expect(p).toContain("UPDATE is not allowed");
     expect(p).toContain("(none)");
   });
 
   test("forbids PROMOTE when there are no candidates", () => {
     const p = buildPrompt({ project: "demo-app", existing: [], pairs: PAIRS, sessionUuids: ["a"] });
-    expect(p).toContain("PROMOTE is FORBIDDEN");
+    expect(p).toContain("PROMOTE is not allowed");
   });
 
   test("constrains PROMOTE to the exact candidate names", () => {
@@ -31,8 +31,7 @@ describe("buildPrompt", () => {
       pairs: PAIRS,
       sessionUuids: ["a"],
     });
-    expect(p).toContain("PROMOTE is allowed only if");
-    expect(p).toContain("[watch-the-dlq, pin-sdk-versions]");
+    expect(p).toContain("PROMOTE must name exactly one of: [watch-the-dlq, pin-sdk-versions]");
     expect(p).toContain("--- skill: watch-the-dlq ---");
   });
 
@@ -43,7 +42,7 @@ describe("buildPrompt", () => {
       pairs: PAIRS,
       sessionUuids: ["a"],
     });
-    expect(p).toContain("EXACTLY one of: [retry-webhooks, verify-slugs]");
+    expect(p).toContain("UPDATE must name exactly one of: [retry-webhooks, verify-slugs]");
   });
 
   test("embeds existing skill bodies for the curator to compare against", () => {

@@ -23,188 +23,95 @@ export function applyVerdict(args: {
   probe?: boolean;
 }): ApplyResult {
   const { verdict, candidates, skillsRoot, candidatesRoot, author } = args;
-  const sourceProjects = [...new Set(candidates.map((c) => c.dir ?? "").filter(Boolean))];
 
   if (verdict.verdict === "SKIP") {
     log(`SKIP: ${verdict.reason ?? "no reason given"}`);
     return { skillPath: null, ok: true, reason: verdict.reason ?? "skip" };
   }
 
-  if (verdict.verdict === "CREATE") {
-    if (!verdict.name || !verdict.body || !verdict.description) {
-      log(`CREATE verdict missing required field(s)`);
-      return {
-        skillPath: null,
-        ok: false,
-        reason: "CREATE verdict missing name, description, or body",
-      };
-    }
-    // probe is the one forced-create path that goes live directly: its
-    // whole point is a loadable skill minutes after install
-    const tier = args.probe ? "active" as const : "candidate" as const;
-    const root = tier === "active" ? skillsRoot : candidatesRoot;
-    // a re-CREATE of an existing candidate is a re-observation: fold
-    // the new evidence in. Decided by existence, never by matching an
-    // error message.
-    const reobserved =
-      tier === "candidate" && existsSync(join(root, verdict.name, "SKILL.md"));
-    try {
-      const r = reobserved
-        ? mergeSkill({
-            skillsRoot: root,
-            name: verdict.name,
-            description: verdict.description,
-            trigger: verdict.trigger ?? undefined,
-            body: verdict.body,
-            newSourceProjects: sourceProjects,
-            editor: author,
-          })
-        : writeNewSkill({
-            skillsRoot: root,
-            name: verdict.name,
-            description: verdict.description,
-            trigger: verdict.trigger ?? undefined,
-            body: verdict.body,
-            sourceProjects,
-            author,
-          });
-      log(
-        reobserved
-          ? `re-observed candidate ${verdict.name} v${r.version} -> ${r.path}`
-          : `wrote new ${tier} skill ${verdict.name} -> ${r.path}`,
-      );
-      return { skillPath: r.path, tier, ok: true, reason: verdict.reason ?? "" };
-    } catch (e: any) {
-      const msg = String(e?.message ?? e);
-      log(`CREATE failed: ${msg}`);
-      return {
-        skillPath: null,
-        ok: false,
-        reason: `CREATE failed: ${msg.slice(0, 200)}`,
-      };
-    }
+  const fail = (reason: string): ApplyResult => {
+    log(reason);
+    return { skillPath: null, ok: false, reason };
+  };
+
+  if (!verdict.name || !verdict.body) {
+    return fail(`${verdict.verdict} verdict missing name or body`);
   }
 
-  if (verdict.verdict === "PROMOTE") {
-    if (!verdict.name || !verdict.body) {
-      log(`PROMOTE verdict missing required field(s)`);
-      return {
-        skillPath: null,
-        ok: false,
-        reason: "PROMOTE verdict missing name or body",
-      };
+  // resolve the per-verdict differences, then upsert once
+  let root: string;
+  let tier: "candidate" | "active";
+  let description = verdict.description ?? undefined;
+  let trigger = verdict.trigger ?? undefined;
+  let writeAuthor = author;
+  let sourceProjects = [...new Set(candidates.map((c) => c.dir ?? "").filter(Boolean))];
+  let promotedFrom: string | null = null;
+
+  switch (verdict.verdict) {
+    case "CREATE":
+      // probe is the one forced-create path that goes live directly:
+      // its whole point is a loadable skill minutes after install
+      tier = args.probe ? "active" : "candidate";
+      root = tier === "active" ? skillsRoot : candidatesRoot;
+      break;
+    case "PROMOTE": {
+      const candidate = listExistingSkills(candidatesRoot).find((c) => c.name === verdict.name);
+      if (!candidate) {
+        return fail(`PROMOTE target '${verdict.name}' is not a candidate`);
+      }
+      tier = "active";
+      root = skillsRoot;
+      description ??= candidate.frontmatter?.description;
+      trigger ??= candidate.frontmatter?.trigger;
+      writeAuthor = candidate.frontmatter?.author ?? author;
+      sourceProjects = [
+        ...new Set([...(candidate.frontmatter?.source_projects ?? []), ...sourceProjects]),
+      ];
+      promotedFrom = join(candidatesRoot, verdict.name);
+      break;
     }
-    const candidate = listExistingSkills(candidatesRoot).find((c) => c.name === verdict.name);
-    if (!candidate) {
-      log(`PROMOTE target ${verdict.name} not found in ${candidatesRoot}`);
-      return {
-        skillPath: null,
-        ok: false,
-        reason: `PROMOTE target '${verdict.name}' is not a candidate`,
-      };
+    case "UPDATE":
+      tier = "active";
+      root = skillsRoot;
+      break;
+  }
+
+  try {
+    const exists = existsSync(join(root, verdict.name, "SKILL.md"));
+    if (!exists && !description) {
+      return fail(`${verdict.verdict} '${verdict.name}' would create a skill but has no description`);
     }
-    const description = verdict.description ?? candidate.frontmatter?.description;
-    if (!description) {
-      return {
-        skillPath: null,
-        ok: false,
-        reason: "PROMOTE has no description (verdict and candidate both lack one)",
-      };
-    }
-    const mergedProjects = [
-      ...new Set([...(candidate.frontmatter?.source_projects ?? []), ...sourceProjects]),
-    ];
-    try {
-      const r = existsSync(join(skillsRoot, verdict.name, "SKILL.md"))
-        ? mergeSkill({
-            skillsRoot,
-            name: verdict.name,
-            description,
-            trigger: verdict.trigger ?? candidate.frontmatter?.trigger,
-            body: verdict.body,
-            newSourceProjects: mergedProjects,
-            editor: author,
-          })
-        : writeNewSkill({
-            skillsRoot,
-            name: verdict.name,
-            description,
-            trigger: verdict.trigger ?? candidate.frontmatter?.trigger,
-            body: verdict.body,
-            sourceProjects: mergedProjects,
-            author: candidate.frontmatter?.author ?? author,
-          });
+    const r = exists
+      ? mergeSkill({
+          skillsRoot: root,
+          name: verdict.name,
+          description,
+          trigger,
+          body: verdict.body,
+          newSourceProjects: sourceProjects,
+          editor: author,
+        })
+      : writeNewSkill({
+          skillsRoot: root,
+          name: verdict.name,
+          description: description!,
+          trigger,
+          body: verdict.body,
+          sourceProjects,
+          author: writeAuthor,
+        });
+    if (promotedFrom) {
       try {
-        rmSync(join(candidatesRoot, verdict.name), { recursive: true, force: true });
+        rmSync(promotedFrom, { recursive: true, force: true });
       } catch (e) {
         log(`promoted but failed to remove candidate dir: ${(e as Error).message}`);
       }
-      log(`promoted ${verdict.name} -> ${r.path}`);
-      return { skillPath: r.path, tier: "active", ok: true, reason: verdict.reason ?? "" };
-    } catch (e: any) {
-      const msg = String(e?.message ?? e);
-      log(`promote failed: ${msg}`);
-      return {
-        skillPath: null,
-        ok: false,
-        reason: `promote failed: ${msg.slice(0, 200)}`,
-      };
     }
-  }
-
-  // UPDATE
-  if (!verdict.name || !verdict.body) {
-    log(`UPDATE verdict missing required field(s)`);
-    return {
-      skillPath: null,
-      ok: false,
-      reason: "UPDATE verdict missing name or body",
-    };
-  }
-  try {
-    const r = mergeSkill({
-      skillsRoot,
-      name: verdict.name,
-      description: verdict.description ?? undefined,
-      trigger: verdict.trigger ?? undefined,
-      body: verdict.body,
-      newSourceProjects: sourceProjects,
-      editor: author,
-    });
-    log(`merged into ${verdict.name} v${r.version} -> ${r.path}`);
-    return { skillPath: r.path, tier: "active", ok: true, reason: verdict.reason ?? "" };
+    log(`${verdict.verdict} ${verdict.name} v${r.version} (${tier}) -> ${r.path}`);
+    return { skillPath: r.path, tier, ok: true, reason: verdict.reason ?? "" };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
-    if (/does not exist/i.test(msg) && verdict.description) {
-      log(`UPDATE target ${verdict.name} missing, falling back to writeNewSkill`);
-      try {
-        const r = writeNewSkill({
-          skillsRoot,
-          name: verdict.name,
-          description: verdict.description,
-          trigger: verdict.trigger ?? undefined,
-          body: verdict.body,
-          sourceProjects,
-          author,
-        });
-        log(`wrote new skill (update fallback) ${verdict.name} -> ${r.path}`);
-        return { skillPath: r.path, tier: "active", ok: true, reason: verdict.reason ?? "" };
-      } catch (e2: any) {
-        const msg2 = String(e2?.message ?? e2);
-        log(`writeNewSkill fallback failed: ${msg2}`);
-        return {
-          skillPath: null,
-          ok: false,
-          reason: `writeNewSkill fallback failed: ${msg2.slice(0, 200)}`,
-        };
-      }
-    }
-    log(`mergeSkill failed: ${msg}`);
-    return {
-      skillPath: null,
-      ok: false,
-      reason: `mergeSkill failed: ${msg.slice(0, 200)}`,
-    };
+    return fail(`${verdict.verdict} failed: ${msg.slice(0, 200)}`);
   }
 }
 
