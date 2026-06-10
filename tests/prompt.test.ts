@@ -13,14 +13,14 @@ function skill(name: string, body = "## When to use\nExample."): ExistingSkill {
 
 describe("buildPrompt", () => {
   test("forbids UPDATE when there are no existing skills", () => {
-    const p = buildPrompt({ project: "Plouto", existing: [], pairs: PAIRS, sessionUuids: ["a"] });
+    const p = buildPrompt({ project: "demo-app", existing: [], pairs: PAIRS, sessionUuids: ["a"] });
     expect(p).toContain("UPDATE is FORBIDDEN");
     expect(p).toContain("(no existing skills in this scope)");
   });
 
   test("constrains UPDATE to the exact existing skill names", () => {
     const p = buildPrompt({
-      project: "Plouto",
+      project: "demo-app",
       existing: [skill("retry-webhooks"), skill("verify-slugs")],
       pairs: PAIRS,
       sessionUuids: ["a"],
@@ -30,7 +30,7 @@ describe("buildPrompt", () => {
 
   test("embeds existing skill bodies for the curator to compare against", () => {
     const p = buildPrompt({
-      project: "Plouto",
+      project: "demo-app",
       existing: [skill("retry-webhooks", "## Workflow\nAlways check the dead-letter queue.")],
       pairs: PAIRS,
       sessionUuids: ["a"],
@@ -42,7 +42,7 @@ describe("buildPrompt", () => {
   test("caps each existing skill body at 1500 chars", () => {
     const long = "x".repeat(5000);
     const p = buildPrompt({
-      project: "Plouto",
+      project: "demo-app",
       existing: [skill("big", long)],
       pairs: PAIRS,
       sessionUuids: ["a"],
@@ -60,7 +60,7 @@ describe("buildPrompt", () => {
   });
 
   test("instructs the new verdict vocabulary, not the retired one", () => {
-    const p = buildPrompt({ project: "Plouto", existing: [], pairs: PAIRS, sessionUuids: ["a"] });
+    const p = buildPrompt({ project: "demo-app", existing: [], pairs: PAIRS, sessionUuids: ["a"] });
     expect(p).toContain('"verdict": "CREATE" | "UPDATE" | "SKIP"');
     expect(p).toContain("Default to SKIP");
     expect(p).not.toContain("KEEP");
@@ -70,7 +70,7 @@ describe("buildPrompt", () => {
   test("caps the existing-skills section and lists overflow by name only", () => {
     // 30 skills x ~1500-char bodies = ~45k chars, well past the 24k budget
     const many = Array.from({ length: 30 }, (_, i) => skill(`skill-${i}`, "z".repeat(1490)));
-    const p = buildPrompt({ project: "Plouto", existing: many, pairs: PAIRS, sessionUuids: ["a"] });
+    const p = buildPrompt({ project: "demo-app", existing: many, pairs: PAIRS, sessionUuids: ["a"] });
 
     expect(p).toContain("--- skill: skill-0 ---");
     expect(p).toContain("bodies omitted for space");
@@ -86,7 +86,7 @@ describe("buildPrompt", () => {
   test("truncates oversized pair content", () => {
     const huge = "y".repeat(3000);
     const p = buildPrompt({
-      project: "Plouto",
+      project: "demo-app",
       existing: [],
       pairs: [{ user: huge, assistant: huge }],
       sessionUuids: ["a"],
