@@ -72,7 +72,9 @@ distill team share verify-integrations-before-sweep
 The repo holds flat `<skill>/SKILL.md` dirs. distill clones it under
 `~/.distill/team/` and materializes skills into `~/.claude/skills/`
 on every pull (automatic after each session), so teammates' skills
-just appear. Your own local skill always wins a name collision.
+just appear. Skills the curator mines while you're on a team are
+shared automatically too; `team share` covers hand-written ones.
+Your own local skill always wins a name collision.
 Review-before-merge is repo policy (protected branch + PRs) if your
 team wants it.
 

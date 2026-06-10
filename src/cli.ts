@@ -182,6 +182,14 @@ async function runUpskill(flags: Flags): Promise<number> {
       console.log(`distill sync: pushed ${sync.sessionsSynced} session(s) to your workspace`);
     }
   }
+  // on a team, what the curator just mined is shared automatically;
+  // hand-written skills still go via `distill team share`
+  if (cfg.team && result.skillPath && result.verdict?.name) {
+    const shared = teamShare(result.verdict.name);
+    if (!flags.json && shared.ok) {
+      console.log(`distill team: shared '${result.verdict.name}' with your team`);
+    }
+  }
   // teammates' skills appear between sessions
   if (cfg.team) {
     const pull = teamPull();
