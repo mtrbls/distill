@@ -33,20 +33,13 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Fixed (mining pipeline)
 
-- **`distill collect <dir>`** opts in every git project under a dir
-  at once (personal, stored in `~/.distill/config.json`; the git
-  toplevel is the project boundary). Refuses `$HOME` itself — that
-  would include every checkout you ever clone.
-- **`distill init`** opts a project in: it writes a
-  `.claude/distill.json` marker (commit it to cover the whole team).
-  The marker takes precedence over collect roots.
-  Placement anchors to the nearest ancestor carrying the marker, and
-  nothing else — a bare `.claude/` dir is not consent, since Claude
-  Code creates one for settings the moment anyone uses it. `$HOME` is
-  a hard ceiling for the walk. Sessions started in subdirectories
-  anchor correctly, a subproject's own marker is respected, and
-  evidence spanning multiple projects places globally rather than
-  into either project's git history.
+- Placement anchors to the git repo the work happened in: the walk
+  from the session's cwd finds the nearest `.git` (dir, or file for
+  worktrees/submodules), so sessions started in subdirectories anchor
+  at the repo root. `$HOME` is a hard ceiling — a dotfiles repo at
+  home or a repo above it never captures sessions. Evidence spanning
+  multiple repos (sessions can change cwd via `/cd` or worktrees)
+  places globally rather than into either repo's git history.
 
 - Hooks read Claude Code's stdin payload and pass `transcript_path`
   to the worker; the triggering session is exempt from the

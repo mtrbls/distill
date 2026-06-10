@@ -19,12 +19,9 @@ automatically in your next session.
 The analysis runs through your own `claude` CLI, on your existing
 subscription. Nothing leaves your machine.
 
-Run `distill collect ~/w` once and every git project under `~/w`
-collects skills into its own `.claude/skills/`. For a single project
-(or a whole team), `distill init` in the repo writes a committable
-marker instead. Without either opt-in, everything goes to
-`~/.claude/skills/` — distill never writes into a repo that didn't
-ask.
+Skills mined from work in a git repo land in that repo's
+`.claude/skills/` — detected automatically, nothing to configure.
+Everything else goes to `~/.claude/skills/`.
 
 A pattern seen once becomes a *candidate* in `.claude/skill-candidates/`
 (dormant, never loaded, zero cost). When the pattern shows up again —
@@ -33,11 +30,10 @@ skill. Candidates that never recur quietly expire.
 
 ## Teams
 
-One command: `distill init` at the repo root, commit the marker.
-From then on skills (and candidates) land in the repo — commit them
-like any file (PR review if your team wants it). Teammates get them
-with their next `git pull`, and their Claude loads them from there.
-Skills they mine flow back the same way.
+No setup. When a skill lands in your project repo, commit it like any
+file (PR review if your team wants it). Teammates get it with their
+next `git pull`, and their Claude loads it from there. Skills they
+mine flow back the same way.
 
 ## Commands
 
@@ -45,8 +41,6 @@ You rarely need any of these. The background loop does the work.
 
 | Command | What it does |
 |---|---|
-| `distill collect <dir>` | Opt in every project under a dir (yours, not your clones) |
-| `distill init` | Opt one project in via a committable marker (team opt-in) |
 | `distill upskill` | Run an analysis pass now |
 | `distill usage` | Token and tool usage from your local sessions |
 | `distill status` | What distill knows: skills, last run, connection |

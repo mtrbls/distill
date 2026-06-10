@@ -10,10 +10,9 @@ import {
   readConfig,
   resetInstallId,
   resolveTelemetry,
-  setCollectRoots,
   setTelemetryEnabled,
 } from "./upskill/config.ts";
-import { PROJECT_MARKER, resolveAnchor, upskill } from "./upskill/index.ts";
+import { findRepoRoot, upskill } from "./upskill/index.ts";
 import { buildTestRecord } from "./upskill/payload.ts";
 import {
   connectViaBrowser,
@@ -42,8 +41,6 @@ USAGE
   distill <command> [options]
 
 COMMANDS
-  init             Opt this project in: mined skills land in its .claude/
-  collect [dir]    Opt in everything under a dir (list roots when no arg)
   upskill          Review recent Claude Code sessions for new skills
   usage            Token + tool usage from your local sessions
   status           Show mode, storage, skill counts, last upskill run
@@ -108,10 +105,6 @@ async function main(): Promise<number> {
     case "--version":
       console.log(VERSION);
       return 0;
-    case "init":
-      return runInit();
-    case "collect":
-      return runCollect(rest);
     case "upskill":
       return runUpskill(flags);
     case "probe":
@@ -169,72 +162,6 @@ function flagValue(args: string[], name: string): string | null {
   if (i === -1 || i + 1 >= args.length) return null;
   const v = args[i + 1]!;
   return v.startsWith("--") ? null : v;
-}
-
-async function runInit(): Promise<number> {
-  const root = process.cwd();
-  if (root === homedir()) {
-    console.error("distill init: home is the global scope already; run this inside a project");
-    return 2;
-  }
-  const marker = join(root, PROJECT_MARKER);
-  if (existsSync(marker)) {
-    console.log(`distill: already initialized (${marker})`);
-    return 0;
-  }
-  mkdirSync(join(root, ".claude"), { recursive: true });
-  writeFileSync(marker, JSON.stringify({ version: 1 }, null, 2) + "\n");
-  console.log(`distill: this project now collects mined skills`);
-  console.log(`         marker:     ${marker}`);
-  console.log(`         skills:     ${join(root, ".claude", "skills")}`);
-  console.log(`         candidates: ${join(root, ".claude", "skill-candidates")}`);
-  console.log("");
-  console.log("Commit the marker so your team's distill collects here too.");
-  return 0;
-}
-
-async function runCollect(args: string[]): Promise<number> {
-  const remove = args.includes("--remove");
-  const target = args.find((a) => !a.startsWith("-"));
-  const cfg = readConfig();
-
-  if (!target) {
-    if (cfg.collect_roots.length === 0) {
-      console.log("distill collect: no roots configured");
-      console.log("  distill collect ~/w     projects under ~/w collect mined skills");
-    } else {
-      for (const r of cfg.collect_roots) console.log(r);
-    }
-    return 0;
-  }
-
-  const abs = resolve(target);
-  if (abs === homedir()) {
-    console.error(
-      "distill collect: refusing your whole home directory — that would include every checkout you ever clone. Pick the dir that holds YOUR projects.",
-    );
-    return 2;
-  }
-
-  if (remove) {
-    if (!cfg.collect_roots.includes(abs)) {
-      console.log(`distill collect: ${abs} is not configured`);
-      return 0;
-    }
-    setCollectRoots(cfg.collect_roots.filter((r) => r !== abs));
-    console.log(`distill: stopped collecting under ${abs}`);
-    return 0;
-  }
-
-  if (cfg.collect_roots.includes(abs)) {
-    console.log(`distill collect: already collecting under ${abs}`);
-    return 0;
-  }
-  setCollectRoots([...cfg.collect_roots, abs]);
-  console.log(`distill: projects under ${abs} now collect mined skills`);
-  console.log(`         boundary: each project's git root, .claude/skills + .claude/skill-candidates`);
-  console.log(`         a committed ${PROJECT_MARKER} marker still takes precedence`);
-  return 0;
 }
 
 async function runUpskill(flags: Flags, triggerTranscript?: string): Promise<number> {
@@ -440,7 +367,7 @@ async function runStatus(flags: Flags): Promise<number> {
   const untrackedSkills = skills.length - minedSkills.length;
   // same resolution upskill uses, so status agrees with placement
   // even when run from a subdirectory
-  const projectRoot = resolveAnchor(process.cwd(), cfg.collect_roots);
+  const projectRoot = findRepoRoot(process.cwd());
   const candidateCount =
     listCandidates().length +
     (projectRoot ? listCandidates(join(projectRoot, ".claude", "skill-candidates")).length : 0);
