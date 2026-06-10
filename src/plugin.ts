@@ -107,12 +107,25 @@ export function installPlugin(opts: InstallOptions): InstallResult {
   mkdirSync(PLUGINS_DIR, { recursive: true });
   writeFileSync(INSTALLED_PLUGINS_PATH, JSON.stringify(installed, null, 2) + "\n");
 
-  // No known_marketplaces entry: the plugin is locally registered via
-  // installed_plugins + enabledPlugins, and a marketplace pointing at
-  // a repo Claude Code can't fetch causes startup errors (same class
-  // of bug as stale marketplace renames).
+  // 5) known_marketplaces entry. Tested without it (2026-06-10): the
+  // plugin silently does not load — Claude Code validates plugins
+  // against known marketplaces at startup. autoUpdate stays false so
+  // a fetch failure can't break startup.
+  const marketplaces: JsonObject = readJsonOrDefault(KNOWN_MARKETPLACES_PATH, {});
+  if (!marketplaces[MARKETPLACE]) {
+    marketplaces[MARKETPLACE] = {
+      source: {
+        source: "github",
+        repo: "mtrbls/distill",
+      },
+      installLocation: PLUGIN_INSTALL_DIR,
+      lastUpdated: registeredAt,
+      autoUpdate: false,
+    };
+    writeFileSync(KNOWN_MARKETPLACES_PATH, JSON.stringify(marketplaces, null, 2) + "\n");
+  }
 
-  // 5) Enable the plugin in settings.json
+  // 6) Enable the plugin in settings.json
   const settings: JsonObject = readJsonOrDefault(SETTINGS_PATH, {});
   const enabledPlugins: JsonObject = (settings.enabledPlugins as JsonObject) ?? {};
   enabledPlugins[KEY] = true;
