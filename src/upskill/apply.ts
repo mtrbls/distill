@@ -18,6 +18,7 @@ export function applyVerdict(args: {
 }): ApplyResult {
   const { verdict, candidates, skillsRoot, author } = args;
   const sourceSessions = candidates.map((c) => c.sessionUuid);
+  const sourceProjects = [...new Set(candidates.map((c) => c.dir ?? "").filter(Boolean))];
 
   if (verdict.verdict === "SKIP") {
     log(`SKIP: ${verdict.reason ?? "no reason given"}`);
@@ -41,6 +42,7 @@ export function applyVerdict(args: {
         trigger: verdict.trigger ?? undefined,
         body: verdict.body,
         sourceSessions,
+        sourceProjects,
         author,
       });
       log(`wrote new skill ${verdict.name} -> ${r.path}`);
@@ -73,6 +75,7 @@ export function applyVerdict(args: {
       trigger: verdict.trigger ?? undefined,
       body: verdict.body,
       newSourceSessions: sourceSessions,
+      newSourceProjects: sourceProjects,
       editor: author,
     });
     log(`merged into ${verdict.name} v${r.version} -> ${r.path}`);
