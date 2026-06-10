@@ -29,7 +29,7 @@ const STATE_PATH = join(DISTILL_HOME, "state.json");
 const COUNTER_PATH = join(DISTILL_HOME, "counter.json");
 // user prompts between mid-session mining attempts (long-lived
 // sessions never hit the Stop hook, so this is their only trigger)
-const PROMPTS_THRESHOLD = 10;
+const PROMPTS_THRESHOLD = 20;
 
 function usage(): void {
   console.log(`distill ${VERSION}
