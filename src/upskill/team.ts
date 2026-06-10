@@ -52,6 +52,22 @@ function git(cwd: string | null, args: string[]): { ok: boolean; out: string; er
   }
 }
 
+// Fail closed before any write: `git -C` walks UP the tree when the
+// dir isn't a repo, so a missing .git could land commits in a parent
+// repo (e.g. a dotfiles repo in $HOME). Confirm the checkout is its
+// own repo root and points at the configured remote.
+function verifyCheckout(team: TeamConfig): string | null {
+  const top = git(team.checkout, ["rev-parse", "--show-toplevel"]);
+  if (!top.ok || top.out !== team.checkout) {
+    return `checkout at ${team.checkout} is not a git repo root`;
+  }
+  const origin = git(team.checkout, ["remote", "get-url", "origin"]);
+  if (!origin.ok || origin.out !== team.remote) {
+    return `checkout origin '${origin.out}' does not match team remote '${team.remote}'`;
+  }
+  return null;
+}
+
 // ---------- manifest ----------
 
 interface Manifest {
@@ -146,6 +162,8 @@ export function teamShare(skillName: string): TeamResult {
   if (!isValidSkillName(skillName)) {
     return { ok: false, reason: `invalid skill name '${skillName}'` };
   }
+  const bad = verifyCheckout(team);
+  if (bad) return { ok: false, reason: bad };
 
   const src = join(SKILLS_ROOT, skillName);
   if (!existsSync(join(src, "SKILL.md"))) {
@@ -203,6 +221,11 @@ export function teamPull(): PullResult {
   const team = readConfig().team;
   if (!team) return { ...none, reason: "not on a team" };
 
+  const bad = verifyCheckout(team);
+  if (bad) {
+    log(`pull refused: ${bad}`);
+    return { ...none, reason: bad };
+  }
   const pull = git(team.checkout, ["pull", "--ff-only"]);
   if (!pull.ok) {
     log(`pull failed: ${pull.err.slice(0, 200)}`);
