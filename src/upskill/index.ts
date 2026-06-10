@@ -60,7 +60,18 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   // 1. Discover
   const t0 = Date.now();
   const watermark = readWatermark();
-  const candidates = findCandidates({ sessionsRoot, watermark, config, force });
+  const eligible = findCandidates({ sessionsRoot, watermark, config, force });
+  // one pass mines one project: the prompt is labeled with a single
+  // project and the skill lands in a single repo, so evidence from
+  // other projects must not leak in. Scope to the newest session's
+  // project; the single watermark still advances over the full set
+  // (per-project watermarks are the planned successor).
+  const candidates = eligible.filter((c) => c.dir === eligible[0]?.dir);
+  if (candidates.length < eligible.length) {
+    log(
+      `scoped to ${candidates[0]!.project}: ${candidates.length}/${eligible.length} eligible session(s), other projects' sessions skipped this pass`,
+    );
+  }
   phases.push({
     name: "discover",
     durationMs: Date.now() - t0,

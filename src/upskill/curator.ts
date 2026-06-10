@@ -17,7 +17,10 @@ export async function runCurator(args: {
 }): Promise<CuratorResult> {
   log(`spawning claude -p (timeout ${args.config.curatorTimeoutMs}ms)`);
 
-  const proc = Bun.spawn(["claude", "-p", args.prompt], {
+  // prompt goes over stdin: as an argv arg it would be visible to every
+  // local process via `ps`, and it carries session content
+  const proc = Bun.spawn(["claude", "-p"], {
+    stdin: new TextEncoder().encode(args.prompt),
     stdout: "pipe",
     stderr: "pipe",
   });

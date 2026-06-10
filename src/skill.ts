@@ -65,7 +65,16 @@ function oneLine(s: string): string {
 }
 
 function quoteIfNeeded(s: string): string {
-  if (s.includes("\n") || s.includes(":") || s.includes("#") || s.startsWith(" ") || s.endsWith(" ")) {
+  // over-quoting is harmless; an unquoted YAML indicator char or a
+  // bool/number lookalike breaks Claude Code's loader
+  const needsQuote =
+    s === "" ||
+    /[:#"'\\\n\t]/.test(s) ||
+    /^[[\]{}&*!|>%@`,?\-\s]/.test(s) ||
+    /^\s|\s$/.test(s) ||
+    /^(true|false|null|yes|no|on|off|~)$/i.test(s) ||
+    /^[+.\d]/.test(s);
+  if (needsQuote) {
     return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
   }
   return s;

@@ -39,7 +39,7 @@ export function installPlugin(opts: InstallOptions): InstallResult {
     version: VERSION,
     author: { name: "distill" },
     homepage: "https://distill.plouto.ai",
-    repository: "https://github.com/PloutoAI/distill",
+    repository: "https://github.com/mtrbls/distill",
     license: "MIT",
     keywords: ["claude-code", "skills", "mining"],
   };
@@ -89,7 +89,7 @@ export function installPlugin(opts: InstallOptions): InstallResult {
 
   // 4) Add to installed_plugins.json
   const registeredAt = new Date().toISOString();
-  const installed: JsonObject = readJsonOrDefault(INSTALLED_PLUGINS_PATH, {
+  const installed: JsonObject = readJsonStrict(INSTALLED_PLUGINS_PATH, {
     version: 2,
     plugins: {},
   });
@@ -146,7 +146,7 @@ export function installPlugin(opts: InstallOptions): InstallResult {
     JSON.stringify(hooksJson, null, 2) + "\n",
   );
 
-  const marketplaces: JsonObject = readJsonOrDefault(KNOWN_MARKETPLACES_PATH, {});
+  const marketplaces: JsonObject = readJsonStrict(KNOWN_MARKETPLACES_PATH, {});
   marketplaces[MARKETPLACE] = {
     source: {
       source: "github",
@@ -159,7 +159,7 @@ export function installPlugin(opts: InstallOptions): InstallResult {
   writeFileSync(KNOWN_MARKETPLACES_PATH, JSON.stringify(marketplaces, null, 2) + "\n");
 
   // 6) Enable the plugin in settings.json
-  const settings: JsonObject = readJsonOrDefault(SETTINGS_PATH, {});
+  const settings: JsonObject = readJsonStrict(SETTINGS_PATH, {});
   const enabledPlugins: JsonObject = (settings.enabledPlugins as JsonObject) ?? {};
   enabledPlugins[KEY] = true;
   settings.enabledPlugins = enabledPlugins;
@@ -241,5 +241,20 @@ function readJsonOrDefault<T extends JsonObject>(path: string, fallback: T): T {
     return JSON.parse(readFileSync(path, "utf-8")) as T;
   } catch {
     return fallback;
+  }
+}
+
+// install does read-modify-write on Claude Code's own registry files;
+// treating an unparseable existing file as empty would write back a
+// file containing only distill's entry and destroy the user's config
+function readJsonStrict<T extends JsonObject>(path: string, fallback: T): T {
+  if (!existsSync(path)) return fallback;
+  const raw = readFileSync(path, "utf-8");
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new Error(
+      `${path} exists but is not valid JSON; refusing to overwrite it. Fix or remove the file, then re-run distill install.`,
+    );
   }
 }

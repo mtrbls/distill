@@ -19,11 +19,22 @@ export function parseVerdict(stdout: string): Verdict | null {
     log(`no JSON object found in ${stdout.length} chars`);
     return null;
   }
+  // skill bodies are markdown and routinely carry unbalanced braces
+  // ("${", "interface X {"), so braces inside strings must not count
   let depth = 0;
   let end = -1;
+  let inString = false;
+  let escaped = false;
   for (let i = start; i < cleaned.length; i++) {
     const ch = cleaned[i];
-    if (ch === "{") depth++;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
     else if (ch === "}") {
       depth--;
       if (depth === 0) {

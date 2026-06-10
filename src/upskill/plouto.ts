@@ -80,6 +80,7 @@ export async function syncRecent(opts: { sessionsRoot?: string } = {}): Promise<
   const url = `${cfg.plouto.api_url.replace(/\/$/, "")}/api/ingest/sessions`;
   const email = gitEmailFallback();
   let sessionsSynced = 0;
+  let sessionsUpserted = 0;
   let turnsUpserted = 0;
 
   for (const f of files) {
@@ -90,7 +91,9 @@ export async function syncRecent(opts: { sessionsRoot?: string } = {}): Promise<
     }
     // a long session can exceed Plouto's 2 MB body cap on its own; the
     // server upserts by uuid, so re-sending the session row with each
-    // turn chunk is safe
+    // turn chunk is safe. Count the server's upsert once per session,
+    // not once per chunk.
+    let firstChunk = true;
     for (const chunk of chunkTurns(extracted)) {
       const body = assembleIngestRequest([chunk], email);
       const result = await postIngest(url, cfg.plouto.token, body);
@@ -98,11 +101,13 @@ export async function syncRecent(opts: { sessionsRoot?: string } = {}): Promise<
         return {
           ok: false,
           sessionsSynced,
-          sessionsUpserted: sessionsSynced,
+          sessionsUpserted,
           turnsUpserted,
           reason: result.reason,
         };
       }
+      if (firstChunk) sessionsUpserted += result.sessionsUpserted;
+      firstChunk = false;
       turnsUpserted += result.turnsUpserted;
     }
     sessionsSynced++;
@@ -110,7 +115,7 @@ export async function syncRecent(opts: { sessionsRoot?: string } = {}): Promise<
   }
 
   log(`synced ${sessionsSynced} session(s), ${turnsUpserted} turns upserted`);
-  return { ok: true, sessionsSynced, sessionsUpserted: sessionsSynced, turnsUpserted, reason: "" };
+  return { ok: true, sessionsSynced, sessionsUpserted, turnsUpserted, reason: "" };
 }
 
 function* chunkTurns(extracted: ExtractedSession): Generator<ExtractedSession> {

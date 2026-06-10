@@ -79,6 +79,20 @@ describe("writeNewSkill", () => {
     expect(fm.trigger).toBe("When this happens");
   });
 
+  test("quotes a description starting with a YAML indicator char", () => {
+    writeNewSkill({
+      skillsRoot: root,
+      name: "yaml-indicator",
+      description: "[draft] verify targets first",
+      body: "b",
+      author: "a@b.c",
+    });
+    const raw = readFileSync(join(root, "yaml-indicator", "SKILL.md"), "utf-8");
+    expect(raw).toContain('description: "[draft] verify targets first"');
+    const fm = listExistingSkills(root)[0]!.frontmatter!;
+    expect(fm.description).toBe("[draft] verify targets first");
+  });
+
   test("quotes description containing a colon so frontmatter survives", () => {
     writeNewSkill({
       skillsRoot: root,

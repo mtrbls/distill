@@ -44,6 +44,15 @@ describe("parseVerdict", () => {
     expect(v!.reason).toContain("{ foo: { bar: 1 } }");
   });
 
+  test("handles unbalanced braces inside string values", () => {
+    const raw =
+      '{"verdict":"CREATE","name":"x","description":"d","body":"use ${VAR} or interface X {"}';
+    const v = parseVerdict(raw);
+    expect(v).not.toBeNull();
+    expect(v!.verdict).toBe("CREATE");
+    expect(v!.body).toContain("interface X {");
+  });
+
   test("rejects the retired KEEP and MERGE tokens", () => {
     expect(parseVerdict('{"verdict":"KEEP","name":"x"}')).toBeNull();
     expect(parseVerdict('{"verdict":"MERGE","name":"x"}')).toBeNull();

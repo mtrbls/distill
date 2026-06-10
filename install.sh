@@ -103,7 +103,9 @@ if ! curl -fsSL --proto '=https' --tlsv1.2 -o "$tmp_bin" "$asset_url"; then
 fi
 
 # Verify checksum if SHA256SUMS is available
-if curl -fsSL --proto '=https' --tlsv1.2 -o /tmp/distill-sums "$checksum_url" 2>/dev/null; then
+tmp_sums="$(mktemp 2>/dev/null || mktemp -t distill-sums)"
+trap 'rm -f "$tmp_bin" "$tmp_sums"' EXIT INT TERM
+if curl -fsSL --proto '=https' --tlsv1.2 -o "$tmp_sums" "$checksum_url" 2>/dev/null; then
   info "verifying checksum"
   if command -v shasum >/dev/null 2>&1; then
     actual="$(shasum -a 256 "$tmp_bin" | awk '{print $1}')"
@@ -114,14 +116,14 @@ if curl -fsSL --proto '=https' --tlsv1.2 -o /tmp/distill-sums "$checksum_url" 2>
     actual=""
   fi
   if [ -n "$actual" ]; then
-    expected="$(grep "  $asset\$" /tmp/distill-sums | awk '{print $1}' || true)"
+    expected="$(grep "  $asset\$" "$tmp_sums" | awk '{print $1}' || true)"
     if [ -z "$expected" ]; then
       info "no checksum entry for $asset in SHA256SUMS, skipping verification"
     elif [ "$actual" != "$expected" ]; then
       err "checksum mismatch for $asset (got $actual, expected $expected)"
     fi
   fi
-  rm -f /tmp/distill-sums
+  rm -f "$tmp_sums"
 else
   info "no SHA256SUMS published, skipping checksum verification"
 fi
