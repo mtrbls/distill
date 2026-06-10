@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { findCandidates } from "../src/upskill/discover.ts";
 import { findRepoRoot } from "../src/upskill/index.ts";
@@ -86,8 +86,11 @@ describe("findRepoRoot", () => {
 });
 
 describe("findCandidates curator quarantine", () => {
+  // same encoding Claude Code applies to session dirs
+  const curatorDir = join(homedir(), ".distill", "curator").replace(/[/.]/g, "-");
+
   test("never mines the curator's own transcripts", () => {
-    const p = writeSession("-Users-alice--distill-curator", "c1");
+    const p = writeSession(curatorDir, "c1");
     const found = findCandidates({
       sessionsRoot: root,
       watermark: WATERMARK,
@@ -96,5 +99,17 @@ describe("findCandidates curator quarantine", () => {
       triggerPath: p, // even as an explicit trigger
     });
     expect(found).toHaveLength(0);
+  });
+
+  test("a real project merely NAMED *distill-curator is still mined", () => {
+    const p = writeSession("-Users-alice-work-distill-curator", "s1");
+    const found = findCandidates({
+      sessionsRoot: root,
+      watermark: WATERMARK,
+      config: DEFAULT_CONFIG,
+      force: true,
+      triggerPath: p,
+    });
+    expect(found).toHaveLength(1);
   });
 });

@@ -43,25 +43,14 @@ export function applyVerdict(args: {
     // whole point is a loadable skill minutes after install
     const tier = args.probe ? "active" as const : "candidate" as const;
     const root = tier === "active" ? skillsRoot : candidatesRoot;
+    // a re-CREATE of an existing candidate is a re-observation: fold
+    // the new evidence in. Decided by existence, never by matching an
+    // error message.
+    const reobserved =
+      tier === "candidate" && existsSync(join(root, verdict.name, "SKILL.md"));
     try {
-      const r = writeNewSkill({
-        skillsRoot: root,
-        name: verdict.name,
-        description: verdict.description,
-        trigger: verdict.trigger ?? undefined,
-        body: verdict.body,
-        sourceProjects,
-        author,
-      });
-      log(`wrote new ${tier} skill ${verdict.name} -> ${r.path}`);
-      return { skillPath: r.path, tier, ok: true, reason: verdict.reason ?? "" };
-    } catch (e: any) {
-      const msg = String(e?.message ?? e);
-      // a re-CREATE of an existing candidate is a re-observation; fold
-      // the new evidence in rather than failing
-      if (tier === "candidate" && /already exists/i.test(msg)) {
-        try {
-          const r = mergeSkill({
+      const r = reobserved
+        ? mergeSkill({
             skillsRoot: root,
             name: verdict.name,
             description: verdict.description,
@@ -69,20 +58,29 @@ export function applyVerdict(args: {
             body: verdict.body,
             newSourceProjects: sourceProjects,
             editor: author,
+          })
+        : writeNewSkill({
+            skillsRoot: root,
+            name: verdict.name,
+            description: verdict.description,
+            trigger: verdict.trigger ?? undefined,
+            body: verdict.body,
+            sourceProjects,
+            author,
           });
-          log(`re-observed candidate ${verdict.name} v${r.version} -> ${r.path}`);
-          return { skillPath: r.path, tier, ok: true, reason: verdict.reason ?? "" };
-        } catch (e2: any) {
-          const msg2 = String(e2?.message ?? e2);
-          log(`candidate merge failed: ${msg2}`);
-          return { skillPath: null, ok: false, reason: `candidate merge failed: ${msg2.slice(0, 200)}` };
-        }
-      }
-      log(`writeNewSkill failed: ${msg}`);
+      log(
+        reobserved
+          ? `re-observed candidate ${verdict.name} v${r.version} -> ${r.path}`
+          : `wrote new ${tier} skill ${verdict.name} -> ${r.path}`,
+      );
+      return { skillPath: r.path, tier, ok: true, reason: verdict.reason ?? "" };
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      log(`CREATE failed: ${msg}`);
       return {
         skillPath: null,
         ok: false,
-        reason: `writeNewSkill failed: ${msg.slice(0, 200)}`,
+        reason: `CREATE failed: ${msg.slice(0, 200)}`,
       };
     }
   }

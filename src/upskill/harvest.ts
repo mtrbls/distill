@@ -13,20 +13,31 @@ const CORRECTION_RE =
 const ERRORISH_RE =
   /\b(error|errors|failed|failure|exception|traceback|panic|enoent|exit code [1-9]|[1-9]\d* fail)\b/i;
 
+export interface Harvest {
+  pairs: Pair[];
+  // every distinct cwd the transcripts recorded, collected during the
+  // same read as the pairs (sessions can change cwd via /cd or
+  // worktrees, so placement needs all of them, not the first)
+  cwds: string[];
+}
+
 export function extractPairs(args: {
   candidates: Candidate[];
   config: UpskillConfig;
-}): Pair[] {
+}): Harvest {
   const { candidates, config } = args;
 
   const all: Pair[] = [];
+  const cwds = new Set<string>();
   for (const c of candidates) {
-    all.push(...extractPairsFromFile(c.path, config.maxMsgPerSession));
+    const f = extractPairsFromFile(c.path, config.maxMsgPerSession);
+    all.push(...f.pairs);
+    for (const w of f.cwds) cwds.add(w);
   }
 
   if (all.length === 0) {
     log(`no pairs extracted from ${candidates.length} candidate(s)`);
-    return all;
+    return { pairs: all, cwds: [...cwds] };
   }
 
   // budget selection: corrections and failures first, then recency;
@@ -44,7 +55,7 @@ export function extractPairs(args: {
   }
   chosen.sort((a, b) => a.i - b.i);
   log(`extracted ${all.length} pairs, kept ${chosen.length} (~${charCount} chars)`);
-  return chosen.map((r) => r.p);
+  return { pairs: chosen.map((r) => r.p), cwds: [...cwds] };
 }
 
 function scorePair(p: Pair, prevAssistant: string | undefined): number {
@@ -56,12 +67,16 @@ function scorePair(p: Pair, prevAssistant: string | undefined): number {
   return s;
 }
 
-function extractPairsFromFile(jsonlPath: string, max: number): Pair[] {
+function extractPairsFromFile(
+  jsonlPath: string,
+  max: number,
+): { pairs: Pair[]; cwds: Set<string> } {
+  const cwds = new Set<string>();
   let raw: string;
   try {
     raw = readFileSync(jsonlPath, "utf-8");
   } catch {
-    return [];
+    return { pairs: [], cwds };
   }
   const lines = raw.split("\n");
   const messages: { role: "user" | "assistant"; text: string }[] = [];
@@ -73,6 +88,7 @@ function extractPairsFromFile(jsonlPath: string, max: number): Pair[] {
     } catch {
       continue;
     }
+    if (typeof obj.cwd === "string" && obj.cwd.startsWith("/")) cwds.add(obj.cwd);
     // sidechain = subagent traffic, the "user" there isn't the human
     if (obj.isSidechain === true) continue;
     if (obj.type === "user" || obj.type === "assistant") {
@@ -90,7 +106,7 @@ function extractPairsFromFile(jsonlPath: string, max: number): Pair[] {
       pendingUser = null;
     }
   }
-  return pairs.slice(-max);
+  return { pairs: pairs.slice(-max), cwds };
 }
 
 function extractText(content: unknown): string {

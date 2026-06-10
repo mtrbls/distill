@@ -37,6 +37,10 @@ export interface UpskillConfig {
   maxMsgPerSession: number;
   maxPromptChars: number;
   curatorTimeoutMs: number;
+  // model alias or full name passed to `claude -p --model`. Curation
+  // is judge-and-emit-JSON; it does not need the user's interactive
+  // default model.
+  curatorModel: string;
   activeSessionGraceMs: number;
   candidateExpiryDays: number;
 }
@@ -46,6 +50,7 @@ export const DEFAULT_CONFIG: UpskillConfig = {
   maxMsgPerSession: 60,
   maxPromptChars: 60_000,
   curatorTimeoutMs: 240_000,
+  curatorModel: "sonnet",
   activeSessionGraceMs: 30_000,
   candidateExpiryDays: 45,
 };

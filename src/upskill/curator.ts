@@ -25,12 +25,12 @@ export async function runCurator(args: {
   prompt: string;
   config: UpskillConfig;
 }): Promise<CuratorResult> {
-  log(`spawning claude -p (timeout ${args.config.curatorTimeoutMs}ms)`);
+  log(`spawning claude -p --model ${args.config.curatorModel} (timeout ${args.config.curatorTimeoutMs}ms)`);
 
   mkdirSync(CURATOR_CWD, { recursive: true });
   // prompt goes over stdin: as an argv arg it would be visible to every
   // local process via `ps`, and it carries session content
-  const proc = Bun.spawn(["claude", "-p"], {
+  const proc = Bun.spawn(["claude", "-p", "--model", args.config.curatorModel], {
     cwd: CURATOR_CWD,
     stdin: new TextEncoder().encode(args.prompt),
     stdout: "pipe",

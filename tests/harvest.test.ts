@@ -38,7 +38,7 @@ describe("extractPairs", () => {
       userMsg("now add a test"),
       assistantMsg("Test added."),
     ]);
-    const pairs = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
+    const { pairs } = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
     expect(pairs).toHaveLength(2);
     expect(pairs[0]).toEqual({ user: "fix the bug", assistant: "On it." });
     expect(pairs[1]).toEqual({ user: "now add a test", assistant: "Test added." });
@@ -61,7 +61,7 @@ describe("extractPairs", () => {
         },
       },
     ]);
-    const pairs = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
+    const { pairs } = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
     const a = pairs[0]!.assistant;
     expect(a).toContain("[Bash: bun test --filter lint]");
     expect(a).toContain('[Edit /tmp/b.ts: "foo" => "bar"]');
@@ -84,7 +84,7 @@ describe("extractPairs", () => {
       },
       assistantMsg("Fixing the assertion."),
     ]);
-    const pairs = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
+    const { pairs } = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
     expect(pairs[0]!.user).toContain("FINAL: expected 2 got 3");
     expect(pairs[0]!.user).toContain("...[snip]...");
   });
@@ -100,7 +100,7 @@ describe("extractPairs", () => {
     }
     const c = writeSession("s2c", lines);
     const tight = { ...DEFAULT_CONFIG, maxPromptChars: 2_500 };
-    const pairs = extractPairs({ candidates: [c], config: tight });
+    const { pairs } = extractPairs({ candidates: [c], config: tight });
     // the correction is the OLDEST pair; pure recency would drop it
     expect(pairs.map((p) => p.user)).toContain("no, that broke the build");
     expect(pairs[pairs.length - 1]!.user).toContain("routine question 9");
@@ -113,7 +113,7 @@ describe("extractPairs", () => {
       { ...userMsg("subagent task prompt") as object, isSidechain: true },
       { ...assistantMsg("subagent reply") as object, isSidechain: true },
     ]);
-    const pairs = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
+    const { pairs } = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
     expect(pairs).toHaveLength(1);
     expect(pairs[0]!.user).toBe("real human question");
   });
@@ -125,7 +125,7 @@ describe("extractPairs", () => {
       userMsg("hello"),
       assistantMsg("hi"),
     ]);
-    const pairs = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
+    const { pairs } = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
     expect(pairs).toHaveLength(1);
   });
 
@@ -136,13 +136,24 @@ describe("extractPairs", () => {
       ["{not json", JSON.stringify(userMsg("q")), JSON.stringify(assistantMsg("a"))].join("\n"),
     );
     const c: Candidate = { path, sessionUuid: "bad", project: "p", mtimeMs: Date.now() };
-    const pairs = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
+    const { pairs } = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
     expect(pairs).toHaveLength(1);
+  });
+
+  test("collects every distinct cwd during the same read", () => {
+    const c = writeSession("s5", [
+      { ...userMsg("q1") as object, cwd: "/Users/alice/repo-a" },
+      assistantMsg("a1"),
+      { ...userMsg("q2") as object, cwd: "/Users/alice/repo-b" },
+      { ...assistantMsg("a2") as object, cwd: "/Users/alice/repo-a" },
+    ]);
+    const { cwds } = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
+    expect(cwds.sort()).toEqual(["/Users/alice/repo-a", "/Users/alice/repo-b"]);
   });
 
   test("returns empty for an unreadable file", () => {
     const c: Candidate = { path: join(dir, "ghost.jsonl"), sessionUuid: "g", project: "p", mtimeMs: 0 };
-    expect(extractPairs({ candidates: [c], config: DEFAULT_CONFIG })).toEqual([]);
+    expect(extractPairs({ candidates: [c], config: DEFAULT_CONFIG }).pairs).toEqual([]);
   });
 
   test("caps total content at maxPromptChars, keeping the most recent pairs", () => {
@@ -153,7 +164,7 @@ describe("extractPairs", () => {
     }
     const c = writeSession("s4", lines);
     const tightConfig = { ...DEFAULT_CONFIG, maxPromptChars: 5_000 };
-    const pairs = extractPairs({ candidates: [c], config: tightConfig });
+    const { pairs } = extractPairs({ candidates: [c], config: tightConfig });
     expect(pairs.length).toBeGreaterThan(0);
     expect(pairs.length).toBeLessThan(50);
     // recency bias: the LAST question must survive the cap

@@ -1,6 +1,6 @@
 // discover -> harvest -> curate -> apply -> advance watermark
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createLogger } from "../log.ts";
@@ -97,9 +97,9 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
     });
   }
 
-  // 2. Harvest
+  // 2. Harvest (pairs + every cwd the transcripts recorded, one read)
   const t1 = Date.now();
-  const pairs = extractPairs({ candidates, config });
+  const { pairs, cwds } = extractPairs({ candidates, config });
   phases.push({
     name: "harvest",
     durationMs: Date.now() - t1,
@@ -133,11 +133,9 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   // project's lessons into another's git history: fall back to the
   // global dirs, which are private to this machine.
   const roots = new Set<string>();
-  for (const c of candidates) {
-    for (const cwd of sessionCwds(c.path)) {
-      const r = findRepoRoot(cwd);
-      if (r) roots.add(r);
-    }
+  for (const cwd of cwds) {
+    const r = findRepoRoot(cwd);
+    if (r) roots.add(r);
   }
   if (roots.size > 1) {
     log(`evidence spans ${roots.size} projects (${[...roots].join(", ")}); placing globally`);
@@ -287,18 +285,3 @@ export function findRepoRoot(dir: string, home: string = homedir()): string | nu
   }
 }
 
-// every distinct cwd the transcript recorded; sessions can change
-// directory mid-flight, so the first line is not the whole story
-function sessionCwds(jsonlPath: string): string[] {
-  const out = new Set<string>();
-  try {
-    for (const line of readFileSync(jsonlPath, "utf-8").split("\n")) {
-      if (!line.includes('"cwd"')) continue;
-      try {
-        const cwd = JSON.parse(line).cwd;
-        if (typeof cwd === "string" && cwd.startsWith("/")) out.add(cwd);
-      } catch {}
-    }
-  } catch {}
-  return [...out];
-}

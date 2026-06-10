@@ -1,10 +1,16 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createLogger } from "../log.ts";
+import { CURATOR_CWD } from "./curator.ts";
 import type { Watermark } from "./state.ts";
 import type { Candidate, UpskillConfig } from "./types.ts";
 
 const log = createLogger("discover");
+
+// Claude Code encodes a session's project dir by replacing "/" and
+// "." with "-". Exact match — a suffix would also catch a real
+// project that happens to be named *distill-curator.
+const CURATOR_DIR_ENCODED = CURATOR_CWD.replace(/[/.]/g, "-");
 
 export function findCandidates(args: {
   sessionsRoot: string;
@@ -30,7 +36,7 @@ export function findCandidates(args: {
   for (const projectDir of readdirSync(sessionsRoot)) {
     // curator transcripts (claude -p spawned from ~/.distill/curator)
     // are distill's own exhaust, never evidence
-    if (projectDir.endsWith("-distill-curator")) continue;
+    if (projectDir === CURATOR_DIR_ENCODED) continue;
     const full = join(sessionsRoot, projectDir);
     let s;
     try {
