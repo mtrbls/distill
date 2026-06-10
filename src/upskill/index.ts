@@ -1,11 +1,4 @@
-// Orchestrator for the upskill pipeline.
-//
-// Flow:
-//   discover  →  harvest  →  curate  →  apply  →  state advance
-//
-// Each phase is its own module; this file just coordinates them,
-// times them, returns a UpskillResult, and (best-effort) emits an
-// OTLP trace at the end via the telemetry exporter.
+// discover -> harvest -> curate -> apply -> advance watermark
 
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -45,9 +38,7 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   const decision = resolveTelemetry({ noTelemetryFlag: opts.noTelemetry });
 
   async function finish(result: UpskillResult): Promise<UpskillResult> {
-    // Always call emitTrace; it handles the decision internally and
-    // logs whichever path it took (emit or skip). This gives us a
-    // full audit trail in the file log regardless of telemetry state.
+    // emitTrace logs whether it emitted or skipped, so always call it
     try {
       const trace = buildTrace({
         startedAtMs,
@@ -55,9 +46,7 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
         phases,
         verdict: result.verdict,
       });
-      // Fire-and-forget; the outer main() uses process.exitCode (not
-      // process.exit) so this can drain on its own time. The exporter
-      // has a 5s timeout so it can't hang.
+      // fire and forget, main() lets the event loop drain this
       emitTrace({ trace, decision }).catch((e) => {
         log(`emitTrace promise rejected: ${(e as Error).message}`);
       });
@@ -191,7 +180,7 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
     status: applied.ok ? "ok" : "error",
   });
 
-  // 5. State advance (always, regardless of outcome)
+  // 5. Advance watermark (always)
   const t6 = Date.now();
   advanceWatermark(candidates);
   phases.push({
@@ -215,8 +204,6 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   });
 }
 
-// Re-export public types so callers can `import { upskill, UpskillResult }`
-// from a single path.
 export type {
   Candidate,
   Pair,

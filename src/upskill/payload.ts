@@ -1,13 +1,6 @@
-// Mode-aware OTLP payload builder.
-//
-// Solo mode: strict allowlist on attributes. Counts, durations,
-// enums, error types only. The allowlist filter runs at the
-// emission boundary, NOT just at config read time. Even if a phase
-// callsite passes content fields by mistake, scrubAttrs() drops them.
-//
-// Team mode: full payload, including row bodies, but only when the
-// resolved config says mode == "team" (which only flips after the
-// user accepts the consent notice at `distill team init`).
+// Builds the OTLP payload. Solo mode scrubs every span against an
+// allowlist at the emission boundary; team mode (consented) passes
+// bodies through.
 
 import { VERSION } from "../version.ts";
 import { readConfig } from "./config.ts";
@@ -28,11 +21,8 @@ export interface PhaseTrace {
   bodies?: Record<string, unknown>; // team mode only
 }
 
-// Strict Level-2 allowlist. Any attr key not in this set is dropped
-// when mode == "solo". The list is short on purpose. Applies to BOTH
-// phase spans and the root span — every span goes through scrubAttrs
-// before emission, so future code can't accidentally leak a new
-// field in solo mode.
+// Anything not listed here gets dropped in solo mode, root span
+// included.
 const SOLO_ATTR_ALLOWLIST = new Set([
   // phase span attrs
   "scanned",
@@ -81,13 +71,10 @@ export function buildTrace(args: {
     spanId: rootSpanId,
     startUnixNano: msToUnixNano(args.startedAtMs),
     endUnixNano: msToUnixNano(args.startedAtMs + args.durationMs),
-    // Root goes through the same scrub as phase spans: no span is
-    // exempt from the solo allowlist.
     attributes: mode === "solo" ? scrubAttrs(rootAttrs) : rootAttrs,
     status: args.phases.some((p) => p.status === "error") ? "error" : "ok",
   };
 
-  // Per-phase child spans, ordered as they ran.
   const phaseSpans: SpanData[] = [];
   let cursorMs = args.startedAtMs;
   for (const p of args.phases) {
@@ -121,8 +108,7 @@ function pickPhase(phases: PhaseTrace[], name: string): PhaseTrace | undefined {
   return phases.find((p) => p.name === name);
 }
 
-// Exported for tests: the scrub is the privacy boundary, so it gets
-// direct coverage rather than only being exercised through buildTrace.
+// exported for tests
 export function scrubAttrs(attrs: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(attrs)) {

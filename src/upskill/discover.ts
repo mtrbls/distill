@@ -65,6 +65,6 @@ export function findCandidates(args: {
 }
 
 function deriveProjectName(rawDir: string): string {
-  // ~/.claude/projects/-Users-alice-w-myproj → "w/myproj"
+  // ~/.claude/projects/-Users-alice-w-myproj -> "w/myproj"
   return rawDir.replace(/^-Users-[^-]+-/, "").replace(/-/g, "/") || rawDir;
 }

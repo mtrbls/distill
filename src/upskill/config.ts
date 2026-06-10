@@ -1,13 +1,7 @@
-// Persistent settings for distill.
-//
-// ~/.distill/config.json is the source of truth for telemetry on/off,
-// endpoint override, install-id, first-run-notice state, and mode
-// (solo or team).
-//
-// Opt-out resolution lives here too. Order matters:
-//   DO_NOT_TRACK > DISTILL_TELEMETRY=0 > --no-telemetry flag > config.enabled
-// then endpoint resolution:
-//   OTEL_EXPORTER_OTLP_ENDPOINT > config.endpoint_override > team endpoint > default
+// ~/.distill/config.json. Opt-out precedence:
+//   DO_NOT_TRACK > DISTILL_TELEMETRY=0 > --no-telemetry > config.enabled
+// Endpoint precedence:
+//   OTEL_EXPORTER_OTLP_ENDPOINT > override > team endpoint > default
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";

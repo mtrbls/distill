@@ -55,10 +55,8 @@ function serializeFrontmatter(fm: SkillFrontmatter): string {
   return lines.join("\n");
 }
 
-// description and trigger must be single-line: the hand-rolled
-// frontmatter parser reads line-by-line, and Claude Code's YAML
-// loader chokes on raw newlines in scalars. The curator is told
-// "one line" but LLMs drift; sanitize at the write boundary.
+// the frontmatter parser is line-based and Claude Code's YAML loader
+// chokes on raw newlines, so flatten these at the write boundary
 function oneLine(s: string): string {
   return s.replace(/\s*\n\s*/g, " ").trim();
 }

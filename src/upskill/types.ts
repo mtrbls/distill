@@ -1,9 +1,5 @@
-// Shared types for the upskill pipeline.
-//
-// The orchestrator in index.ts depends on every other module.
-// Every other module depends only on this file (plus stdlib).
-// That is what keeps the dependency graph acyclic and what makes
-// each module testable in isolation in v0.2 when evals land.
+// Shared types. Modules depend on this file and nothing else in the
+// pipeline, which keeps the graph acyclic.
 
 export interface Candidate {
   path: string;
@@ -17,10 +13,8 @@ export interface Pair {
   assistant: string;
 }
 
-// The curator's decision for one upskill run:
-//   CREATE  write a brand-new skill
-//   UPDATE  extend an existing skill with new evidence
-//   SKIP    nothing new this round, no file written
+// CREATE = new skill, UPDATE = extend an existing one, SKIP = nothing
+// worth saving this round
 export interface Verdict {
   verdict: "CREATE" | "UPDATE" | "SKIP";
   name: string | null;

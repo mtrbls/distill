@@ -20,8 +20,7 @@ export function extractPairs(args: {
     return all;
   }
 
-  // Char-budget cap, keeping the most recent pairs to fit the curator's
-  // prompt limit.
+  // keep the most recent pairs that fit the budget
   let charCount = 0;
   const capped: Pair[] = [];
   for (let i = all.length - 1; i >= 0; i--) {
@@ -52,9 +51,7 @@ function extractPairsFromFile(jsonlPath: string, max: number): Pair[] {
     } catch {
       continue;
     }
-    // Sidechain entries are subagent traffic: the "user" there is the
-    // orchestrating agent, not the human. Mixing them in pollutes the
-    // curator's evidence about what the human actually asked for.
+    // sidechain = subagent traffic, the "user" there isn't the human
     if (obj.isSidechain === true) continue;
     if (obj.type === "user" || obj.type === "assistant") {
       const text = extractText(obj.message?.content);
@@ -83,7 +80,7 @@ function extractText(content: unknown): string {
       if (block.type === "text" && typeof block.text === "string") {
         parts.push(block.text);
       } else if (block.type === "tool_use" && typeof block.name === "string") {
-        // signal that a tool was used without dumping its full input
+        // tool name only, inputs can be huge or sensitive
         parts.push(`[tool: ${block.name}]`);
       } else if (block.type === "tool_result" && typeof block.content === "string") {
         parts.push(`[tool_result] ${block.content.slice(0, 400)}`);

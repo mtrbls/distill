@@ -1,20 +1,11 @@
-// The prompt sent TO the curator.
-//
-// Pure function. No I/O, no async, no side effects. Given existing
-// skills, recent activity pairs, and project metadata, returns the
-// string the curator LLM sees.
-//
-// Reused at v0.2 by the eval engine to build replay prompts.
+// Builds the prompt the curator sees. Pure, no I/O.
 
 import type { ExistingSkill } from "../skill.ts";
 import { truncate } from "./harvest.ts";
 import type { Pair } from "./types.ts";
 
-// Total char budget for the existing-skills section. Per-skill bodies
-// are capped at 1500 chars; without a total cap the section grows
-// unbounded with the user's skill count (17 skills ≈ 25k chars; 100
-// skills would dwarf the activity evidence). Skills past the budget
-// are listed by name only — the UPDATE constraint still covers them.
+// Per-skill bodies are capped, but so is the whole section: past the
+// budget, skills get listed by name only (UPDATE still covers them).
 const EXISTING_SKILLS_CHAR_BUDGET = 24_000;
 const PER_SKILL_BODY_CAP = 1_500;
 

@@ -13,7 +13,7 @@ function ensureDir(): void {
     if (!existsSync(LOGS_DIR)) mkdirSync(LOGS_DIR, { recursive: true });
     dirEnsured = true;
   } catch {
-    // logs must never break the agent
+    // never let logging break anything
   }
 }
 
@@ -26,7 +26,7 @@ export function createLogger(tag: string): Logger {
       const ts = new Date().toISOString();
       appendFileSync(LOG_FILE, `${ts} [${tag}] ${msg}\n`);
     } catch {
-      // ignore: logging is best-effort
+      // best effort
     }
   };
 }

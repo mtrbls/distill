@@ -59,8 +59,7 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  // Find the command: first arg that isn't a flag. Lets users put
-  // global flags like --no-telemetry before or after the command.
+  // first non-flag arg is the command; flags can go on either side
   const cmdIdx = argv.findIndex((a) => !a.startsWith("-"));
   if (cmdIdx === -1) {
     if (argv.includes("-v") || argv.includes("--version")) {
@@ -75,9 +74,8 @@ async function main(): Promise<number> {
   const preCommandFlags = argv.slice(0, cmdIdx);
   const flags = parseFlags([...preCommandFlags, ...rest]);
 
-  // --help anywhere wins over command dispatch. Without this check,
-  // `distill upskill --help` would run a 30s LLM pass instead of
-  // printing help.
+  // --help wins before dispatch, otherwise `upskill --help` would run
+  // a real pass
   if (flags.help) {
     usage();
     return 0;
@@ -139,8 +137,8 @@ function parseFlags(args: string[]): Flags {
 async function runUpskill(flags: Flags): Promise<number> {
   const startedAt = new Date().toISOString();
   if (!flags.json) {
-    // Disclosure before the first emission, not after. The hook-spawned
-    // worker (json mode, stdout ignored) never consumes the notice.
+    // notice goes out before the first emission; the json worker
+    // (hook-spawned, stdout ignored) never shows it
     maybeShowFirstRunNotice(flags.noTelemetry);
     console.log("distill upskill: scanning recent Claude Code sessions...");
   }
@@ -165,8 +163,7 @@ async function runUpskill(flags: Flags): Promise<number> {
   switch (result.verdict.verdict) {
     case "CREATE":
     case "UPDATE": {
-      // The verdict alone isn't success: writeNewSkill/mergeSkill can
-      // fail. skillPath is the proof the file landed on disk.
+      // skillPath is the proof the write actually happened
       if (!result.skillPath) {
         console.log(
           `distill upskill: ${result.verdict.verdict} verdict for '${result.verdict.name}' but writing failed`,
@@ -235,7 +232,7 @@ async function runStatus(flags: Flags): Promise<number> {
 }
 
 async function runHook(event: string, _flags: Flags): Promise<number> {
-  // Hook handlers MUST exit 0 even on error so they never break the agent.
+  // hooks must exit 0 no matter what, they can never break the agent
   try {
     switch (event) {
       case "counter": {
@@ -337,8 +334,8 @@ function spawnUpskillDetached(): void {
 }
 
 function resolveSelfPath(): string {
-  // When running via the compiled binary, argv[0] is the binary path.
-  // When running via `bun src/cli.ts`, we fall back to a `distill` PATH lookup.
+  // compiled binary: argv[0] is the binary path
+  // `bun src/cli.ts`: fall back to a PATH lookup
   const argv0 = process.argv[0] ?? "distill";
   if (argv0.endsWith("/distill") || argv0.endsWith("\\distill")) {
     return resolve(argv0);
@@ -432,9 +429,7 @@ async function runTelemetryTest(): Promise<number> {
 function maybeShowFirstRunNotice(noTelemetryFlag: boolean): void {
   const cfg = readConfig();
   if (cfg.telemetry.first_run_notice_shown) return;
-  // Don't nag if the user already opted out for this run; they
-  // know what they're doing. Mark as shown so we don't surprise
-  // them later.
+  // already opted out for this run, don't nag, just mark it shown
   if (noTelemetryFlag) {
     markFirstRunNoticeShown();
     return;
@@ -467,10 +462,8 @@ async function gitEmail(): Promise<string> {
   return "unknown@local";
 }
 
-// Use process.exitCode (not process.exit) so the event loop can drain
-// in-flight async work like the fire-and-forget telemetry emit before
-// the process exits. The telemetry exporter has its own 5s timeout so
-// this can't hang indefinitely.
+// exitCode instead of exit() so the in-flight telemetry POST can
+// drain; the exporter's own timeout bounds how long that takes
 main()
   .then((code) => {
     process.exitCode = code;

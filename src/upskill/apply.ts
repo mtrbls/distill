@@ -43,7 +43,7 @@ export function applyVerdict(args: {
         sourceSessions,
         author,
       });
-      log(`wrote new skill ${verdict.name} → ${r.path}`);
+      log(`wrote new skill ${verdict.name} -> ${r.path}`);
       return { skillPath: r.path, ok: true, reason: verdict.reason ?? "" };
     } catch (e: any) {
       const msg = String(e?.message ?? e);
@@ -75,7 +75,7 @@ export function applyVerdict(args: {
       newSourceSessions: sourceSessions,
       editor: author,
     });
-    log(`merged into ${verdict.name} v${r.version} → ${r.path}`);
+    log(`merged into ${verdict.name} v${r.version} -> ${r.path}`);
     return { skillPath: r.path, ok: true, reason: verdict.reason ?? "" };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
@@ -91,7 +91,7 @@ export function applyVerdict(args: {
           sourceSessions,
           author,
         });
-        log(`wrote new skill (update fallback) ${verdict.name} → ${r.path}`);
+        log(`wrote new skill (update fallback) ${verdict.name} -> ${r.path}`);
         return { skillPath: r.path, ok: true, reason: verdict.reason ?? "" };
       } catch (e2: any) {
         const msg2 = String(e2?.message ?? e2);

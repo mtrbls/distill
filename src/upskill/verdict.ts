@@ -1,11 +1,5 @@
-// The curator's answer.
-//
-// Pure function. Given whatever the curator LLM emits on stdout
-// (which may include code fences, leading prose, or trailing noise),
-// extract a valid Verdict object, or return null if no valid JSON is
-// present.
-//
-// Reused at v0.2 by the eval engine to parse replay verdicts.
+// Parses whatever the curator emits on stdout into a Verdict, or
+// null if there's no valid JSON in there.
 
 import { createLogger } from "../log.ts";
 import type { Verdict } from "./types.ts";
@@ -13,13 +7,13 @@ import type { Verdict } from "./types.ts";
 const log = createLogger("verdict");
 
 export function parseVerdict(stdout: string): Verdict | null {
-  // Tolerate code fences, leading prose, trailing noise.
+  // tolerate code fences and surrounding prose
   const cleaned = stdout
     .replace(/```json\s*/g, "")
     .replace(/```\s*/g, "")
     .trim();
 
-  // Find the first balanced { ... } object.
+  // first balanced { ... } object
   const start = cleaned.indexOf("{");
   if (start === -1) {
     log(`no JSON object found in ${stdout.length} chars`);

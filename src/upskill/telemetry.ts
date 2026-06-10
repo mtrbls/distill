@@ -1,11 +1,6 @@
-// OTLP/HTTP/JSON exporter.
-//
-// Hand-rolled wire-format encoder + fire-and-forget POST. No npm deps.
-// Best-effort: failures land in the file log and the agent moves on.
-// Never retries; never blocks; never throws upstream.
-//
-// Wire spec: https://opentelemetry.io/docs/specs/otlp/#otlphttp
-// JSON encoding: a straight JSON of the OTLP protobuf schema.
+// Hand-rolled OTLP/HTTP/JSON exporter. Fire-and-forget, no retries,
+// failures only ever land in the file log.
+// https://opentelemetry.io/docs/specs/otlp/#otlphttp
 
 import { createLogger } from "../log.ts";
 import type { TelemetryDecision } from "./config.ts";
