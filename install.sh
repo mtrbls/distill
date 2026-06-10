@@ -11,7 +11,7 @@
 # Environment:
 #   DISTILL_PREFIX   install dir (default: $HOME/.distill)
 #   DISTILL_VERSION  pinned version (default: latest)
-#   DISTILL_REPO     GitHub owner/repo (default: PloutoAI/distill)
+#   DISTILL_REPO     GitHub owner/repo (default: mtrbls/distill)
 #
 # Telemetry:
 #   nothing is emitted until you run `distill connect` (the OTLP
@@ -156,7 +156,7 @@ cat <<'EOF'
 
 Next:
   - Restart Claude Code so the plugin hooks activate.
-  - Run `distill mine` to mine your last sessions for a skill now.
-  - Run `distill status` to see installed skills + last mine.
+  - Run `distill upskill` to analyze your recent sessions now.
+  - Run `distill status` to see your skills and state.
 
 EOF
