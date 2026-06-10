@@ -127,32 +127,31 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   // global dir keeps cross-project skills and non-repo work.
   // NOTE: a separate/global team skills repo may come back later for
   // teams whose skills span many codebases.
-  // resolve every cwd the mined sessions recorded to a repo root
-  // (walking up, so subdirectory sessions still find their repo).
+  // resolve every cwd the mined sessions recorded to a project root.
   // Exactly one root -> embed there. More than one -> the evidence
-  // spans repos, and writing it into either ledger could leak one
-  // repo's lessons into another repo's git history: fall back to the
+  // spans projects, and writing it into either ledger could leak one
+  // project's lessons into another's git history: fall back to the
   // global dirs, which are private to this machine.
   const roots = new Set<string>();
   for (const c of candidates) {
     for (const cwd of sessionCwds(c.path)) {
-      const r = findRepoRoot(cwd);
+      const r = findProjectRoot(cwd);
       if (r) roots.add(r);
     }
   }
   if (roots.size > 1) {
-    log(`evidence spans ${roots.size} repos (${[...roots].join(", ")}); placing globally`);
+    log(`evidence spans ${roots.size} projects (${[...roots].join(", ")}); placing globally`);
   }
-  const repoRoot = roots.size === 1 ? [...roots][0]! : null;
-  const targetRoot = repoRoot
-    ? join(repoRoot, ".claude", "skills")
+  const projectRoot = roots.size === 1 ? [...roots][0]! : null;
+  const targetRoot = projectRoot
+    ? join(projectRoot, ".claude", "skills")
     : skillsRoot;
   // the candidate ledger lives next to the skills it feeds: in the
   // repo it is shared via git, so one teammate's sighting plus
   // another's adds up to a promotion
   const candidatesRoot =
     opts.candidatesRoot ??
-    (repoRoot ? join(repoRoot, ".claude", "skill-candidates") : CANDIDATES_ROOT);
+    (projectRoot ? join(projectRoot, ".claude", "skill-candidates") : CANDIDATES_ROOT);
   if (targetRoot !== skillsRoot) log(`target: ${targetRoot} (project-embedded)`);
   const existing = [
     ...listExistingSkills(skillsRoot),
@@ -281,12 +280,19 @@ export type {
   UpskillResult,
 } from "./types.ts";
 
-// nearest ancestor (including dir itself) containing .git — which may
-// be a directory or, in worktrees/submodules, a file
-export function findRepoRoot(dir: string): string | null {
+// The placement anchor is the nearest ancestor that is a Claude
+// project root: a dir with an existing .claude/ (the root the team
+// already chose) or with .git (where a new .claude/ belongs so it
+// ships with the repo). $HOME never anchors — ~/.claude is the
+// user-global dir, not a project marker, and a dotfiles repo at home
+// must not capture every session under it.
+export function findProjectRoot(dir: string, home: string = homedir()): string | null {
   let d = dir;
   while (true) {
-    if (existsSync(join(d, ".git"))) return d;
+    if (d !== home) {
+      if (existsSync(join(d, ".claude"))) return d;
+      if (existsSync(join(d, ".git"))) return d;
+    }
     const parent = join(d, "..");
     if (parent === d) return null;
     d = parent;

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findCandidates } from "../src/upskill/discover.ts";
-import { findRepoRoot } from "../src/upskill/index.ts";
+import { findProjectRoot } from "../src/upskill/index.ts";
 import { DEFAULT_CONFIG } from "../src/upskill/types.ts";
 
 let root: string;
@@ -52,17 +52,37 @@ describe("findCandidates active-session grace", () => {
   });
 });
 
-describe("findRepoRoot", () => {
-  test("finds the repo root from a nested subdirectory", () => {
+describe("findProjectRoot", () => {
+  test("finds the git root from a nested subdirectory", () => {
     mkdirSync(join(root, "repo", ".git"), { recursive: true });
     mkdirSync(join(root, "repo", "packages", "api"), { recursive: true });
-    expect(findRepoRoot(join(root, "repo", "packages", "api"))).toBe(join(root, "repo"));
-    expect(findRepoRoot(join(root, "repo"))).toBe(join(root, "repo"));
+    expect(findProjectRoot(join(root, "repo", "packages", "api"))).toBe(join(root, "repo"));
+    expect(findProjectRoot(join(root, "repo"))).toBe(join(root, "repo"));
   });
 
-  test("returns null outside any repo", () => {
+  test("an existing .claude dir anchors without any git", () => {
+    mkdirSync(join(root, "ws", ".claude"), { recursive: true });
+    mkdirSync(join(root, "ws", "notes"), { recursive: true });
+    expect(findProjectRoot(join(root, "ws", "notes"))).toBe(join(root, "ws"));
+  });
+
+  test("a subproject's own .claude wins over the repo root above it", () => {
+    mkdirSync(join(root, "mono", ".git"), { recursive: true });
+    mkdirSync(join(root, "mono", "svc", ".claude"), { recursive: true });
+    mkdirSync(join(root, "mono", "svc", "src"), { recursive: true });
+    expect(findProjectRoot(join(root, "mono", "svc", "src"))).toBe(join(root, "mono", "svc"));
+  });
+
+  test("$HOME never anchors, even as a dotfiles repo", () => {
+    mkdirSync(join(root, "home", ".git"), { recursive: true });
+    mkdirSync(join(root, "home", ".claude"), { recursive: true });
+    mkdirSync(join(root, "home", "scratch"), { recursive: true });
+    expect(findProjectRoot(join(root, "home", "scratch"), join(root, "home"))).toBeNull();
+  });
+
+  test("returns null outside any project", () => {
     mkdirSync(join(root, "scratch"), { recursive: true });
-    expect(findRepoRoot(join(root, "scratch"))).toBeNull();
+    expect(findProjectRoot(join(root, "scratch"))).toBeNull();
   });
 });
 

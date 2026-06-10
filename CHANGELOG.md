@@ -33,6 +33,13 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Fixed (mining pipeline)
 
+- Placement anchors to the nearest Claude project root above the
+  session's cwd — a dir with an existing `.claude/`, else a git root
+  (`$HOME` never anchors). Sessions started in repo subdirectories
+  no longer leak skills to the global dirs, a subproject's own
+  `.claude/` is respected, and evidence spanning multiple projects
+  places globally rather than into either project's git history.
+
 - Hooks read Claude Code's stdin payload and pass `transcript_path`
   to the worker; the triggering session is exempt from the
   active-session grace window. Previously mid-session mining could
