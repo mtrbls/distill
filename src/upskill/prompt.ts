@@ -14,6 +14,7 @@ export function buildPrompt(args: {
   existing: ExistingSkill[];
   pairs: Pair[];
   sessionUuids: string[];
+  probe?: boolean;
 }): string {
   const existingBlock = renderExistingSkills(args.existing);
 
@@ -44,7 +45,9 @@ Pick one verdict:
 - SKIP    nothing in the activity warrants a skill
 
 Rules:
-- Default to SKIP. A skill captures a recurring pattern, not a single observation. Single mistakes are not skills.
+${args.probe
+  ? `- This is a first-run probe: find the SINGLE most valuable pattern in this activity and CREATE a skill for it. A near-miss the user caught, a workflow they repeated, a verification they skipped and regretted. Only SKIP if nothing here would genuinely improve future sessions; a mediocre invented skill is worse than none.`
+  : `- Default to SKIP. A skill captures a recurring pattern, not a single observation. Single mistakes are not skills.`}
 - ${updateClause}
 - Skill names are lowercase-kebab-case (e.g., verify-integrations-before-sweep), 1-63 chars.
 - Body style: short sections (When to use / Workflow / Anti-patterns) under 500 words. Match existing-skill style when there is any.

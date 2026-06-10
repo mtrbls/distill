@@ -108,6 +108,7 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
     existing,
     pairs,
     sessionUuids: candidates.map((c) => c.sessionUuid),
+    probe: opts.probe,
   });
   phases.push({
     name: "prompt",

@@ -54,6 +54,7 @@ export interface UpskillOptions {
   force?: boolean;
   author?: string;
   noTelemetry?: boolean;
+  probe?: boolean;
 }
 
 export interface UpskillResult {

@@ -138,6 +138,9 @@ else
   "$BIN_PATH" install || err "plugin registration failed. Retry: $BIN_PATH install"
 fi
 
+# First-run probe: surface a real skill from the user's own sessions
+"$BIN_PATH" probe || true
+
 # PATH advice
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;

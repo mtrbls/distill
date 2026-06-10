@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { installPlugin, isInstalled, uninstallPlugin } from "./plugin.ts";
 import { listExistingSkills, SKILLS_ROOT } from "./skill.ts";
+import { installStarterSkills } from "./starter.ts";
 import {
   readConfig,
   resetInstallId,
@@ -107,6 +108,8 @@ async function main(): Promise<number> {
       return 0;
     case "upskill":
       return runUpskill(flags);
+    case "probe":
+      return runProbe(flags);
     case "_upskill":
       return runUpskill({ ...flags, json: true });
     case "usage":
@@ -399,6 +402,26 @@ async function runDisconnect(): Promise<number> {
   return 0;
 }
 
+async function runProbe(flags: Flags): Promise<number> {
+  console.log("distill: scanning your recent sessions for a first skill (1-3 min)...");
+  const result = await upskill({ force: true, probe: true, noTelemetry: flags.noTelemetry });
+  const v = result.verdict;
+  if (v && (v.verdict === "CREATE" || v.verdict === "UPDATE") && result.skillPath) {
+    console.log("");
+    console.log(`distill found one pattern in your last ${result.scanned} session(s):`);
+    console.log("");
+    console.log(`  ${v.name}`);
+    console.log(`  -> ${result.skillPath}`);
+    console.log("");
+    console.log("It loads automatically in your next Claude Code session.");
+    return 0;
+  }
+  console.log("");
+  console.log("distill: no clear pattern in your recent sessions yet.");
+  console.log("Background mining is on; your first skill arrives as you work.");
+  return 0;
+}
+
 async function runStatus(flags: Flags): Promise<number> {
   const skills = listExistingSkills();
   const minedSkills = skills.filter((s) => s.frontmatter?.created_by === "distill");
@@ -496,6 +519,10 @@ async function runInstall(flags: Flags): Promise<number> {
   console.log(`         plugin dir: ${result.pluginDir}`);
   console.log(`         hooks:      ${result.hooksFile}`);
   console.log(`         binary:     ${binary}`);
+  const starters = installStarterSkills(await gitEmail());
+  if (starters.length > 0) {
+    console.log(`         starter skills: ${starters.join(", ")}`);
+  }
   console.log("");
   console.log("Restart Claude Code to activate the hooks.");
   return 0;
