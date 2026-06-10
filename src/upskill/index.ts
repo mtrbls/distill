@@ -127,10 +127,23 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   // global dir keeps cross-project skills and non-repo work.
   // NOTE: a separate/global team skills repo may come back later for
   // teams whose skills span many codebases.
-  const projectCwd = firstCwd(candidates[0]!.path);
-  // sessions often start in a subdirectory of the repo; walk up to
-  // the root like git does, or the placement leaks to the global dirs
-  const repoRoot = projectCwd ? findRepoRoot(projectCwd) : null;
+  // resolve every cwd the mined sessions recorded to a repo root
+  // (walking up, so subdirectory sessions still find their repo).
+  // Exactly one root -> embed there. More than one -> the evidence
+  // spans repos, and writing it into either ledger could leak one
+  // repo's lessons into another repo's git history: fall back to the
+  // global dirs, which are private to this machine.
+  const roots = new Set<string>();
+  for (const c of candidates) {
+    for (const cwd of sessionCwds(c.path)) {
+      const r = findRepoRoot(cwd);
+      if (r) roots.add(r);
+    }
+  }
+  if (roots.size > 1) {
+    log(`evidence spans ${roots.size} repos (${[...roots].join(", ")}); placing globally`);
+  }
+  const repoRoot = roots.size === 1 ? [...roots][0]! : null;
   const targetRoot = repoRoot
     ? join(repoRoot, ".claude", "skills")
     : skillsRoot;
@@ -280,16 +293,18 @@ export function findRepoRoot(dir: string): string | null {
   }
 }
 
-function firstCwd(jsonlPath: string): string | null {
+// every distinct cwd the transcript recorded; sessions can change
+// directory mid-flight, so the first line is not the whole story
+function sessionCwds(jsonlPath: string): string[] {
+  const out = new Set<string>();
   try {
-    const head = readFileSync(jsonlPath, "utf-8").slice(0, 64_000).split("\n");
-    for (const line of head) {
+    for (const line of readFileSync(jsonlPath, "utf-8").split("\n")) {
       if (!line.includes('"cwd"')) continue;
       try {
         const cwd = JSON.parse(line).cwd;
-        if (typeof cwd === "string" && cwd.startsWith("/")) return cwd;
+        if (typeof cwd === "string" && cwd.startsWith("/")) out.add(cwd);
       } catch {}
     }
   } catch {}
-  return null;
+  return [...out];
 }
