@@ -88,7 +88,7 @@ export function applyVerdict(args: {
           description: verdict.description,
           trigger: verdict.trigger ?? undefined,
           body: verdict.body,
-          sourceSessions,
+
           author,
         });
         log(`wrote new skill (update fallback) ${verdict.name} -> ${r.path}`);
