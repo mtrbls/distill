@@ -44,7 +44,7 @@ describe("extractPairs", () => {
     expect(pairs[1]).toEqual({ user: "now add a test", assistant: "Test added." });
   });
 
-  test("includes tool-use names as signal without the full input", () => {
+  test("includes allowlisted tool inputs, never content blobs", () => {
     const c = writeSession("s2", [
       userMsg("run the linter"),
       {
@@ -53,14 +53,57 @@ describe("extractPairs", () => {
           role: "assistant",
           content: [
             { type: "text", text: "Running it." },
-            { type: "tool_use", name: "Bash", input: { command: "supersecret --token abc" } },
+            { type: "tool_use", name: "Bash", input: { command: "bun test --filter lint" } },
+            { type: "tool_use", name: "Write", input: { file_path: "/tmp/a.ts", content: "WRITEBLOB" } },
+            { type: "tool_use", name: "Edit", input: { file_path: "/tmp/b.ts", old_string: "foo", new_string: "bar" } },
+            { type: "tool_use", name: "mcp__github__create_pr", input: { title: "secretish" } },
           ],
         },
       },
     ]);
     const pairs = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
-    expect(pairs[0]!.assistant).toContain("[tool: Bash]");
-    expect(pairs[0]!.assistant).not.toContain("supersecret");
+    const a = pairs[0]!.assistant;
+    expect(a).toContain("[Bash: bun test --filter lint]");
+    expect(a).toContain('[Edit /tmp/b.ts: "foo" => "bar"]');
+    expect(a).toContain("[Write /tmp/a.ts]");
+    expect(a).not.toContain("WRITEBLOB");
+    // unknown/MCP tools stay name-only
+    expect(a).toContain("[tool: mcp__github__create_pr]");
+    expect(a).not.toContain("secretish");
+  });
+
+  test("keeps the tail of error-bearing tool results, where the error lives", () => {
+    const longOutput = "error: tests failed\n" + "x".repeat(2000) + "\nFINAL: expected 2 got 3";
+    const c = writeSession("s2b", [
+      {
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", content: [{ type: "text", text: longOutput }] }],
+        },
+      },
+      assistantMsg("Fixing the assertion."),
+    ]);
+    const pairs = extractPairs({ candidates: [c], config: DEFAULT_CONFIG });
+    expect(pairs[0]!.user).toContain("FINAL: expected 2 got 3");
+    expect(pairs[0]!.user).toContain("...[snip]...");
+  });
+
+  test("prefers correction pairs over routine ones when the budget is tight", () => {
+    const lines: unknown[] = [
+      userMsg("no, that broke the build"),
+      assistantMsg("Reverting the change."),
+    ];
+    for (let i = 0; i < 10; i++) {
+      lines.push(userMsg(`routine question ${i} ` + "x".repeat(500)));
+      lines.push(assistantMsg(`routine answer ${i} ` + "y".repeat(500)));
+    }
+    const c = writeSession("s2c", lines);
+    const tight = { ...DEFAULT_CONFIG, maxPromptChars: 2_500 };
+    const pairs = extractPairs({ candidates: [c], config: tight });
+    // the correction is the OLDEST pair; pure recency would drop it
+    expect(pairs.map((p) => p.user)).toContain("no, that broke the build");
+    expect(pairs[pairs.length - 1]!.user).toContain("routine question 9");
   });
 
   test("excludes sidechain (subagent) traffic from the evidence", () => {

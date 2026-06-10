@@ -27,6 +27,24 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 - The install-time probe still creates a live skill directly: its
   purpose is a loadable skill minutes after install.
 
+### Fixed (mining pipeline)
+
+- Hooks read Claude Code's stdin payload and pass `transcript_path`
+  to the worker; the triggering session is exempt from the
+  active-session grace window. Previously mid-session mining could
+  never see the session that fired it, and even the Stop hook missed
+  the session that had just ended.
+- The curator (`claude -p`) runs from `~/.distill/curator/` and
+  discovery skips that project dir, so the pipeline no longer mines
+  its own curator transcripts. Usage and sync still count them — they
+  are real token spend.
+- Harvest feeds the curator real evidence: allowlisted tool inputs
+  (Bash commands, Edit old/new strings, file paths, Grep patterns —
+  field-by-field, never content blobs), tool results with the tail
+  preserved when they look like errors, and a char budget that
+  prioritizes correction turns and failure-adjacent pairs over
+  routine traffic instead of pure recency.
+
 ### Changed (breaking)
 
 - The `mine` subcommand is now `upskill`. `distill mine` returns an

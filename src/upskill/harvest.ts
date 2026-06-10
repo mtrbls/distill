@@ -4,6 +4,15 @@ import type { Candidate, Pair, UpskillConfig } from "./types.ts";
 
 const log = createLogger("harvest");
 
+// Pairs whose user turn reads like a correction, or that carry
+// error-bearing tool output, are the evidence distill exists to find
+// ("a mistake you caught", "a check you skipped and regretted");
+// they get the char budget before routine traffic does.
+const CORRECTION_RE =
+  /^(no[,. ]|nope\b|wrong\b|that's (not|wrong)|not what|still (fail|break|broken|wrong|not)|didn't work|doesn't work|undo\b|revert\b|you (broke|missed))/i;
+const ERRORISH_RE =
+  /\b(error|errors|failed|failure|exception|traceback|panic|enoent|exit code [1-9]|[1-9]\d* fail)\b/i;
+
 export function extractPairs(args: {
   candidates: Candidate[];
   config: UpskillConfig;
@@ -20,18 +29,31 @@ export function extractPairs(args: {
     return all;
   }
 
-  // keep the most recent pairs that fit the budget
+  // budget selection: corrections and failures first, then recency;
+  // re-sorted chronologically so the curator reads a coherent story
+  const ranked = all
+    .map((p, i) => ({ p, i, score: scorePair(p, all[i - 1]?.assistant) }))
+    .sort((a, b) => b.score - a.score || b.i - a.i);
   let charCount = 0;
-  const capped: Pair[] = [];
-  for (let i = all.length - 1; i >= 0; i--) {
-    const p = all[i]!;
-    const size = p.user.length + p.assistant.length;
-    if (charCount + size > config.maxPromptChars) break;
+  const chosen: { p: Pair; i: number }[] = [];
+  for (const r of ranked) {
+    const size = r.p.user.length + r.p.assistant.length;
+    if (charCount + size > config.maxPromptChars) continue;
     charCount += size;
-    capped.unshift(p);
+    chosen.push(r);
   }
-  log(`extracted ${all.length} pairs, capped to ${capped.length} (~${charCount} chars)`);
-  return capped;
+  chosen.sort((a, b) => a.i - b.i);
+  log(`extracted ${all.length} pairs, kept ${chosen.length} (~${charCount} chars)`);
+  return chosen.map((r) => r.p);
+}
+
+function scorePair(p: Pair, prevAssistant: string | undefined): number {
+  let s = 0;
+  if (CORRECTION_RE.test(p.user.trim())) s += 2;
+  if (ERRORISH_RE.test(p.assistant)) s += 1;
+  // a correction often follows the turn where things went wrong
+  if (prevAssistant && ERRORISH_RE.test(prevAssistant)) s += 1;
+  return s;
 }
 
 function extractPairsFromFile(jsonlPath: string, max: number): Pair[] {
@@ -76,18 +98,80 @@ function extractText(content: unknown): string {
   if (!Array.isArray(content)) return "";
   const parts: string[] = [];
   for (const block of content) {
-    if (block && typeof block === "object") {
-      if (block.type === "text" && typeof block.text === "string") {
-        parts.push(block.text);
-      } else if (block.type === "tool_use" && typeof block.name === "string") {
-        // tool name only, inputs can be huge or sensitive
-        parts.push(`[tool: ${block.name}]`);
-      } else if (block.type === "tool_result" && typeof block.content === "string") {
-        parts.push(`[tool_result] ${block.content.slice(0, 400)}`);
-      }
+    if (!block || typeof block !== "object") continue;
+    if (block.type === "text" && typeof block.text === "string") {
+      parts.push(block.text);
+    } else if (block.type === "tool_use") {
+      parts.push(renderToolUse(block));
+    } else if (block.type === "tool_result") {
+      const text = toolResultText(block.content);
+      if (text) parts.push(`[tool_result] ${clipResult(text)}`);
     }
   }
   return parts.join("\n").trim();
+}
+
+// Per-tool input allowlist. This evidence goes only to the local
+// `claude -p` curator — the same place the session content came from,
+// never over the network — but inputs are still allowlisted
+// field-by-field: blobs like Write content are budget-blowing noise,
+// and the command/edit fields are where mistakes-caught actually live.
+function renderToolUse(block: any): string {
+  const name = typeof block.name === "string" ? block.name : "tool";
+  const input = block.input && typeof block.input === "object" ? block.input : {};
+  switch (name) {
+    case "Bash":
+      if (typeof input.command === "string") {
+        return `[Bash: ${truncate(input.command, 200)}]`;
+      }
+      break;
+    case "Edit":
+      if (typeof input.file_path === "string") {
+        const oldS = typeof input.old_string === "string" ? truncate(input.old_string, 150) : "";
+        const newS = typeof input.new_string === "string" ? truncate(input.new_string, 150) : "";
+        return `[Edit ${input.file_path}: ${JSON.stringify(oldS)} => ${JSON.stringify(newS)}]`;
+      }
+      break;
+    case "Write":
+    case "Read":
+    case "NotebookEdit":
+      if (typeof input.file_path === "string") {
+        return `[${name} ${input.file_path}]`;
+      }
+      break;
+    case "Grep":
+    case "Glob":
+      if (typeof input.pattern === "string") {
+        return `[${name}: ${truncate(input.pattern, 120)}]`;
+      }
+      break;
+  }
+  return `[tool: ${name}]`;
+}
+
+function toolResultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  const parts: string[] = [];
+  for (const b of content) {
+    if (b && typeof b === "object" && b.type === "text" && typeof b.text === "string") {
+      parts.push(b.text);
+    }
+  }
+  return parts.join("\n");
+}
+
+// errors are the signal and usually live at the tail of the output;
+// successes get a short head-only cap
+function clipResult(s: string): string {
+  const t = s.trim();
+  if (ERRORISH_RE.test(t)) return clipMiddle(t, 300, 500);
+  return truncate(t, 400);
+}
+
+function clipMiddle(s: string, head: number, tail: number): string {
+  if (s.length <= head + tail + 24) return s;
+  return s.slice(0, head) + " ...[snip]... " + s.slice(-tail);
 }
 
 export function truncate(s: string, n: number): string {
