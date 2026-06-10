@@ -30,7 +30,6 @@ export type Phase =
   | "discovery"
   | "extraction"
   | "curation"
-  | "applying"
   | "done";
 
 export interface UpskillConfig {

@@ -271,15 +271,6 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   });
 }
 
-export type {
-  Candidate,
-  Pair,
-  Verdict,
-  UpskillConfig,
-  UpskillOptions,
-  UpskillResult,
-} from "./types.ts";
-
 // The placement anchor is the nearest ancestor with an existing
 // .claude/ — the root the project already chose. Nothing else
 // anchors, by design: a .claude/ dir is the project's opt-in, and

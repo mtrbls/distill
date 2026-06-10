@@ -127,12 +127,6 @@ export function setPloutoConnection(p: PloutoConfig | null): void {
   writeConfig(cfg);
 }
 
-export function setTeam(t: TeamConfig | null): void {
-  const cfg = readConfig();
-  cfg.team = t;
-  writeConfig(cfg);
-}
-
 export function advanceSyncWatermark(lastSyncedAt: string): void {
   const cfg = readConfig();
   if (!cfg.plouto) return;

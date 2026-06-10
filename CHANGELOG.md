@@ -88,8 +88,7 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   state files without `version` are read as v1 and migrated on the
   next write. No user action required.
 - `UpskillResult` carries a `phase` field naming which phase produced
-  the outcome (`discovery` | `extraction` | `curation` | `applying` |
-  `done`). Surfaces in `distill upskill --json` and unblocks the
+  the outcome (`discovery` | `extraction` | `curation` | `done`). Surfaces in `distill upskill --json` and unblocks the
   v0.2 eval engine.
 - `src/upskill/config.ts` for persistent settings at
   `~/.distill/config.json` (telemetry on/off, endpoint override,

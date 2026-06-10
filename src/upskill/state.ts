@@ -38,7 +38,7 @@ export function readWatermark(): Watermark {
   }
 }
 
-export function writeWatermark(w: Watermark): void {
+function writeWatermark(w: Watermark): void {
   try {
     mkdirSync(DISTILL_HOME, { recursive: true });
     writeFileSync(
