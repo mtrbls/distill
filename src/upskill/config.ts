@@ -1,7 +1,6 @@
 // ~/.distill/config.json. Opt-out precedence:
 //   DO_NOT_TRACK > DISTILL_TELEMETRY=0 > --no-telemetry > config.enabled
-// Endpoint precedence:
-//   OTEL_EXPORTER_OTLP_ENDPOINT > override > team endpoint > default
+// Endpoint: OTEL_EXPORTER_OTLP_ENDPOINT or the default, nothing else.
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -19,10 +18,8 @@ const CURRENT_VERSION = 1;
 
 export interface TelemetryConfig {
   enabled: boolean;
-  endpoint_override: string | null;
   install_id: string;
   first_run_notice_shown: boolean;
-  team_consent_at?: string;
 }
 
 export interface TeamConfig {
@@ -43,7 +40,6 @@ export interface PloutoConfig {
 export interface DistillConfig {
   version: number;
   telemetry: TelemetryConfig;
-  mode: "solo" | "team";
   team: TeamConfig | null;
   plouto: PloutoConfig | null;
 }
@@ -70,11 +66,9 @@ function defaults(): DistillConfig {
     version: CURRENT_VERSION,
     telemetry: {
       enabled: true,
-      endpoint_override: null,
       install_id: generateInstallId(),
       first_run_notice_shown: false,
     },
-    mode: "solo",
     team: null,
     plouto: null,
   };
@@ -95,14 +89,11 @@ export function readConfig(): DistillConfig {
       version: typeof raw.version === "number" ? raw.version : CURRENT_VERSION,
       telemetry: {
         enabled: typeof tel.enabled === "boolean" ? tel.enabled : true,
-        endpoint_override: tel.endpoint_override ?? null,
         install_id: typeof tel.install_id === "string" && tel.install_id.length > 0
           ? tel.install_id
           : generateInstallId(),
         first_run_notice_shown: !!tel.first_run_notice_shown,
-        team_consent_at: tel.team_consent_at,
       },
-      mode: raw.mode === "team" ? "team" : "solo",
       team: raw.team ?? null,
       plouto: raw.plouto ?? null,
     };
@@ -165,9 +156,7 @@ export function resolveTelemetry(args: { noTelemetryFlag?: boolean } = {}): Tele
   }
   const envEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
   const endpoint =
-    (envEndpoint && envEndpoint.length > 0)
-      ? envEndpoint
-      : cfg.telemetry.endpoint_override ?? DEFAULT_OTEL_ENDPOINT;
+    (envEndpoint && envEndpoint.length > 0) ? envEndpoint : DEFAULT_OTEL_ENDPOINT;
   return { emit: true, endpoint, reason: "enabled" };
 }
 
@@ -176,12 +165,6 @@ export function resolveTelemetry(args: { noTelemetryFlag?: boolean } = {}): Tele
 export function setTelemetryEnabled(enabled: boolean): void {
   const cfg = readConfig();
   cfg.telemetry.enabled = enabled;
-  writeConfig(cfg);
-}
-
-export function setEndpointOverride(url: string | null): void {
-  const cfg = readConfig();
-  cfg.telemetry.endpoint_override = url;
   writeConfig(cfg);
 }
 

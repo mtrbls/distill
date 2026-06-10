@@ -52,7 +52,6 @@ export function buildTrace(args: {
   verdict: Verdict | null;
 }): TraceData {
   const cfg = readConfig();
-  const mode = cfg.mode;
 
   const traceId = newTraceId();
   const rootSpanId = newSpanId();
@@ -93,7 +92,7 @@ export function buildTrace(args: {
 
   return {
     traceId,
-    resource: buildResource(cfg.telemetry.install_id, mode),
+    resource: buildResource(cfg.telemetry.install_id, cfg.team ? "team" : "solo"),
     scope: { name: "distill", version: VERSION },
     spans: [rootSpan, ...phaseSpans],
   };
@@ -134,7 +133,7 @@ export function buildTestTrace(): TraceData {
   const now = Date.now();
   return {
     traceId,
-    resource: buildResource(cfg.telemetry.install_id, cfg.mode),
+    resource: buildResource(cfg.telemetry.install_id, cfg.team ? "team" : "solo"),
     scope: { name: "distill", version: VERSION },
     spans: [
       {

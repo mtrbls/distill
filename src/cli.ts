@@ -9,7 +9,6 @@ import {
   readConfig,
   resetInstallId,
   resolveTelemetry,
-  setEndpointOverride,
   setTelemetryEnabled,
 } from "./upskill/config.ts";
 import { upskill } from "./upskill/index.ts";
@@ -29,7 +28,9 @@ import { VERSION } from "./version.ts";
 const DISTILL_HOME = join(homedir(), ".distill");
 const STATE_PATH = join(DISTILL_HOME, "state.json");
 const COUNTER_PATH = join(DISTILL_HOME, "counter.json");
-const TURNS_THRESHOLD = 30;
+// user prompts between mid-session mining attempts (long-lived
+// sessions never hit the Stop hook, so this is their only trigger)
+const PROMPTS_THRESHOLD = 10;
 
 function usage(): void {
   console.log(`distill ${VERSION}
@@ -49,9 +50,7 @@ COMMANDS
   sync             Push recent session metadata to your workspace
   install          Register the Claude Code plugin (hooks + manifest)
   uninstall        Remove the Claude Code plugin registration
-  telemetry <sub>  status | on | off | endpoint <url> | reset-install-id | test
-  enable           Re-enable auto-upskill (not yet implemented)
-  disable          Stop auto-upskill (not yet implemented)
+  telemetry <sub>  status | on | off | reset-install-id | test
   upgrade          Self-update to the latest release (not yet implemented)
   hook <event>     Internal: hook entry point (counter|stop)
   _upskill         Internal: detached worker entry, same as upskill
@@ -131,8 +130,6 @@ async function main(): Promise<number> {
       return runUninstall(flags);
     case "telemetry":
       return runTelemetry(rest[0] ?? "status", rest.slice(1), flags);
-    case "enable":
-    case "disable":
     case "upgrade":
       console.error(`distill ${cmd}: not yet implemented`);
       return 2;
@@ -428,7 +425,7 @@ async function runStatus(flags: Flags): Promise<number> {
     console.log(
       JSON.stringify(
         {
-          mode: cfg.mode,
+          mode: cfg.team ? "team" : "solo",
           storage: SKILLS_ROOT,
           skills: { mined: minedSkills.length, untracked: untrackedSkills },
           lastMine,
@@ -444,7 +441,7 @@ async function runStatus(flags: Flags): Promise<number> {
   }
 
   console.log(`distill ${VERSION}\n`);
-  console.log(`Mode:        ${cfg.mode} (local-first)`);
+  console.log(`Mode:        ${cfg.team ? "team" : "solo"} (local-first)`);
   console.log(`Storage:     ${SKILLS_ROOT}`);
   console.log(
     `Skills:      ${minedSkills.length} mined by distill, ${untrackedSkills} other`,
@@ -471,7 +468,7 @@ async function runHook(event: string, _flags: Flags): Promise<number> {
     switch (event) {
       case "counter": {
         const next = bumpCounter();
-        if (next >= TURNS_THRESHOLD) {
+        if (next >= PROMPTS_THRESHOLD) {
           spawnUpskillDetached();
           resetCounter();
         }
@@ -592,8 +589,6 @@ async function runTelemetry(sub: string, args: string[], flags: Flags): Promise<
       setTelemetryEnabled(false);
       console.log("distill: telemetry disabled");
       return 0;
-    case "endpoint":
-      return setTelemetryEndpointCmd(args[0] ?? "");
     case "reset-install-id":
       {
         const id = resetInstallId();
@@ -604,7 +599,7 @@ async function runTelemetry(sub: string, args: string[], flags: Flags): Promise<
       return runTelemetryTest();
     default:
       console.error(`distill telemetry: unknown subcommand '${sub}'`);
-      console.error("usage: distill telemetry {status|on|off|endpoint <url>|reset-install-id|test}");
+      console.error("usage: distill telemetry {status|on|off|reset-install-id|test}");
       return 2;
   }
 }
@@ -613,7 +608,7 @@ function showTelemetryStatus(noTelemetryFlag: boolean): number {
   const cfg = readConfig();
   const decision = resolveTelemetry({ noTelemetryFlag });
   console.log(`telemetry:   ${cfg.telemetry.enabled ? "on" : "off"}`);
-  console.log(`mode:        ${cfg.mode}`);
+  console.log(`mode:        ${cfg.team ? "team" : "solo"}`);
   console.log(`endpoint:    ${decision.endpoint || "(none)"}`);
   console.log(`install-id:  ${cfg.telemetry.install_id}`);
   if (decision.emit) {
@@ -621,27 +616,6 @@ function showTelemetryStatus(noTelemetryFlag: boolean): number {
   } else {
     console.log(`status:      not emitting (${decision.reason})`);
   }
-  return 0;
-}
-
-function setTelemetryEndpointCmd(arg: string): number {
-  if (!arg) {
-    console.error("distill telemetry endpoint: provide a URL or 'default'");
-    return 2;
-  }
-  if (arg === "default") {
-    setEndpointOverride(null);
-    console.log("distill: endpoint override cleared, using default");
-    return 0;
-  }
-  try {
-    new URL(arg);
-  } catch {
-    console.error(`distill telemetry endpoint: invalid URL '${arg}'`);
-    return 2;
-  }
-  setEndpointOverride(arg);
-  console.log(`distill: endpoint set to ${arg}`);
   return 0;
 }
 

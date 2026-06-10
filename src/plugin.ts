@@ -53,7 +53,9 @@ export function installPlugin(opts: InstallOptions): InstallResult {
     description:
       "distill: mines reusable skills from session activity in the background",
     hooks: {
-      PostToolUse: [
+      // per user message, not per tool call: long-lived sessions get
+      // mid-session mining without a process spawn on every Bash/Edit
+      UserPromptSubmit: [
         {
           hooks: [
             {
