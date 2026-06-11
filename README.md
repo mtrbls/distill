@@ -23,6 +23,12 @@ Skills mined from work in a git repo land in that repo's
 `.claude/skills/` — detected automatically, nothing to configure.
 Everything else goes to `~/.claude/skills/`.
 
+Codex sessions are mined too (`~/.codex/sessions`): skills from
+Codex work land where Codex loads them — `.agents/skills/` in the
+repo, `~/.agents/skills/` otherwise. Same format, same candidate →
+promote lifecycle. `distill install` wires Codex's `notify` hook
+automatically when Codex is present.
+
 A pattern seen once becomes a *candidate* in `.claude/skill-candidates/`
 (dormant, never loaded, zero cost). When the pattern shows up again —
 in your work or a teammate's — the candidate is promoted to a real

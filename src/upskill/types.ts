@@ -1,12 +1,17 @@
 // Shared types. Modules depend on this file and nothing else in the
 // pipeline, which keeps the graph acyclic.
 
+export type Provider = "claude" | "codex";
+
 export interface Candidate {
   path: string;
   dir?: string;
   sessionUuid: string;
   project: string;
   mtimeMs: number;
+  // which agent wrote this transcript; decides the parser and where
+  // mined skills activate (.claude/skills vs .agents/skills)
+  provider?: Provider;
 }
 
 export interface Pair {
@@ -57,6 +62,7 @@ export const DEFAULT_CONFIG: UpskillConfig = {
 
 export interface UpskillOptions {
   sessionsRoot?: string;
+  codexSessionsRoot?: string;
   skillsRoot?: string;
   candidatesRoot?: string;
   config?: Partial<UpskillConfig>;

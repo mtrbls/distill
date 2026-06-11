@@ -12,6 +12,7 @@ import {
   resolveTelemetry,
   setTelemetryEnabled,
 } from "./upskill/config.ts";
+import { newestCodexSession } from "./upskill/discover.ts";
 import { findRepoRoot, upskill } from "./upskill/index.ts";
 import { buildTestRecord } from "./upskill/payload.ts";
 import {
@@ -26,6 +27,8 @@ import { listSessionFiles, summarizeUsage } from "./upskill/usage.ts";
 import { VERSION } from "./version.ts";
 
 const DISTILL_HOME = join(homedir(), ".distill");
+const CODEX_HOME = join(homedir(), ".codex");
+const CODEX_SESSIONS_DIR = join(CODEX_HOME, "sessions");
 const STATE_PATH = join(DISTILL_HOME, "state.json");
 const COUNTER_PATH = join(DISTILL_HOME, "counter.json");
 // user prompts between mid-session mining attempts (long-lived
@@ -122,7 +125,7 @@ async function main(): Promise<number> {
     case "status":
       return runStatus(flags);
     case "hook":
-      return runHook(rest[0] ?? "", flags);
+      return runHook(rest[0] ?? "", rest.slice(1), flags);
     case "install":
       return runInstall(flags);
     case "uninstall":
@@ -423,7 +426,7 @@ async function runStatus(flags: Flags): Promise<number> {
   return 0;
 }
 
-async function runHook(event: string, _flags: Flags): Promise<number> {
+async function runHook(event: string, args: string[], _flags: Flags): Promise<number> {
   // hooks must exit 0 no matter what, they can never break the agent
   try {
     switch (event) {
@@ -438,6 +441,18 @@ async function runHook(event: string, _flags: Flags): Promise<number> {
       case "stop": {
         spawnUpskillDetached(await hookTranscriptPath());
         resetCounter();
+        return 0;
+      }
+      case "codex": {
+        // Codex notify appends its JSON payload as the last argv; it
+        // carries no transcript path, so the newest rollout file is
+        // the session that just finished a turn
+        let type = "";
+        try {
+          type = JSON.parse(args[0] ?? "{}")?.type ?? "";
+        } catch {}
+        if (type !== "agent-turn-complete") return 0;
+        spawnUpskillDetached(newestCodexSession(CODEX_SESSIONS_DIR));
         return 0;
       }
       default:
@@ -479,9 +494,37 @@ async function runInstall(flags: Flags): Promise<number> {
   if (starters.length > 0) {
     console.log(`         starter skills: ${starters.join(", ")}`);
   }
+  const codex = installCodexNotify(binary);
+  if (codex) console.log(`         codex:      ${codex}`);
   console.log("");
   console.log("Restart Claude Code to activate the hooks.");
   return 0;
+}
+
+// Codex's only hook surface is `notify` in config.toml (fires on
+// agent-turn-complete). Wire it when Codex is installed; never
+// clobber an existing notify — that's the user's.
+function installCodexNotify(binary: string): string | null {
+  const cfg = join(CODEX_HOME, "config.toml");
+  if (!existsSync(cfg)) return null;
+  const raw = readFileSync(cfg, "utf-8");
+  if (/^\s*notify\s*=/m.test(raw)) {
+    return raw.includes(`"${binary}"`)
+      ? "notify already wired in ~/.codex/config.toml"
+      : "skipped: config.toml already has a notify command (chain distill manually)";
+  }
+  writeFileSync(cfg, raw.replace(/\n*$/, "\n") + `notify = ["${binary}", "hook", "codex"]\n`);
+  return "notify wired in ~/.codex/config.toml (mines Codex sessions too)";
+}
+
+function uninstallCodexNotify(): boolean {
+  const cfg = join(CODEX_HOME, "config.toml");
+  if (!existsSync(cfg)) return false;
+  const raw = readFileSync(cfg, "utf-8");
+  const next = raw.replace(/^notify = \[".*?", "hook", "codex"\]\n/m, "");
+  if (next === raw) return false;
+  writeFileSync(cfg, next);
+  return true;
 }
 
 async function runUninstall(_flags: Flags): Promise<number> {
@@ -490,6 +533,7 @@ async function runUninstall(_flags: Flags): Promise<number> {
     return 0;
   }
   const { removed } = uninstallPlugin();
+  if (uninstallCodexNotify()) removed.push("~/.codex/config.toml: notify");
   console.log(`distill: removed plugin registration:`);
   for (const r of removed) console.log(`         - ${r}`);
   console.log("");

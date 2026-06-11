@@ -25,6 +25,10 @@ import { parseVerdict } from "./verdict.ts";
 const log = createLogger("upskill");
 
 const SESSIONS_ROOT = join(homedir(), ".claude", "projects");
+const CODEX_SESSIONS_ROOT = join(homedir(), ".codex", "sessions");
+// Codex loads skills from .agents/skills (repo, walking up) and
+// ~/.agents/skills (user) — same SKILL.md format
+const CODEX_GLOBAL_SKILLS = join(homedir(), ".agents", "skills");
 
 export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult> {
   const sessionsRoot = opts.sessionsRoot ?? SESSIONS_ROOT;
@@ -63,6 +67,7 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
   const watermark = readWatermark();
   const eligible = findCandidates({
     sessionsRoot,
+    codexSessionsRoot: opts.codexSessionsRoot ?? CODEX_SESSIONS_ROOT,
     watermark,
     config,
     force,
@@ -141,19 +146,25 @@ export async function upskill(opts: UpskillOptions = {}): Promise<UpskillResult>
     log(`evidence spans ${roots.size} projects (${[...roots].join(", ")}); placing globally`);
   }
   const projectRoot = roots.size === 1 ? [...roots][0]! : null;
+  // passes are provider-pure (grouping keys never collide), so one
+  // provider decides where this pass's skills activate: Claude loads
+  // .claude/skills, Codex loads .agents/skills — same SKILL.md format
+  const provider = candidates[0]!.provider ?? "claude";
+  const agentDir = provider === "codex" ? ".agents" : ".claude";
+  const globalSkills = provider === "codex" ? CODEX_GLOBAL_SKILLS : skillsRoot;
   const targetRoot = projectRoot
-    ? join(projectRoot, ".claude", "skills")
-    : skillsRoot;
+    ? join(projectRoot, agentDir, "skills")
+    : globalSkills;
   // the candidate ledger lives next to the skills it feeds: in the
   // repo it is shared via git, so one teammate's sighting plus
   // another's adds up to a promotion
   const candidatesRoot =
     opts.candidatesRoot ??
-    (projectRoot ? join(projectRoot, ".claude", "skill-candidates") : CANDIDATES_ROOT);
-  if (targetRoot !== skillsRoot) log(`target: ${targetRoot} (project-embedded)`);
+    (projectRoot ? join(projectRoot, agentDir, "skill-candidates") : CANDIDATES_ROOT);
+  if (targetRoot !== globalSkills) log(`target: ${targetRoot} (project-embedded, ${provider})`);
   const existing = [
-    ...listExistingSkills(skillsRoot),
-    ...(targetRoot !== skillsRoot ? listExistingSkills(targetRoot) : []),
+    ...listExistingSkills(globalSkills),
+    ...(targetRoot !== globalSkills ? listExistingSkills(targetRoot) : []),
   ];
   expireCandidates({ root: candidatesRoot, maxAgeDays: config.candidateExpiryDays });
   const candidateSkills = listCandidates(candidatesRoot);

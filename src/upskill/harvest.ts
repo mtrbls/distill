@@ -30,7 +30,10 @@ export function extractPairs(args: {
   const all: Pair[] = [];
   const cwds = new Set<string>();
   for (const c of candidates) {
-    const f = extractPairsFromFile(c.path, config.maxMsgPerSession);
+    const f =
+      c.provider === "codex"
+        ? extractCodexFromFile(c.path, config.maxMsgPerSession)
+        : extractPairsFromFile(c.path, config.maxMsgPerSession);
     all.push(...f.pairs);
     for (const w of f.cwds) cwds.add(w);
   }
@@ -161,6 +164,110 @@ function renderToolUse(block: any): string {
         return `[${name}: ${truncate(input.pattern, 120)}]`;
       }
       break;
+  }
+  return `[tool: ${name}]`;
+}
+
+// ---------- Codex rollout parser ----------
+// Lines are {type, payload}. Human/agent text lives in
+// response_item/message (roles user|assistant|developer); tool
+// traffic in function_call(+_output) / custom_tool_call(+_output);
+// cwd in session_meta and per-turn turn_context. event_msg lines
+// duplicate messages as UI events — ignored.
+
+// Codex injects machine-generated user messages; they are not the
+// human and would pollute pairing
+const CODEX_BOILERPLATE = [
+  "<environment_context>",
+  "<turn_context>",
+  "<user_instructions>",
+  "<turn_aborted",
+  "<permissions",
+];
+
+function extractCodexFromFile(
+  jsonlPath: string,
+  max: number,
+): { pairs: Pair[]; cwds: Set<string> } {
+  const cwds = new Set<string>();
+  let raw: string;
+  try {
+    raw = readFileSync(jsonlPath, "utf-8");
+  } catch {
+    return { pairs: [], cwds };
+  }
+  const messages: { role: "user" | "assistant"; text: string }[] = [];
+  for (const line of raw.split("\n")) {
+    if (!line) continue;
+    let obj: any;
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const p = obj?.payload;
+    if (!p || typeof p !== "object") continue;
+    if (obj.type === "session_meta" || obj.type === "turn_context") {
+      if (typeof p.cwd === "string" && p.cwd.startsWith("/")) cwds.add(p.cwd);
+      continue;
+    }
+    if (obj.type !== "response_item") continue;
+    switch (p.type) {
+      case "message": {
+        if (p.role !== "user" && p.role !== "assistant") break;
+        const text = (Array.isArray(p.content) ? p.content : [])
+          .filter(
+            (b: any) =>
+              b &&
+              (b.type === "input_text" || b.type === "output_text") &&
+              typeof b.text === "string",
+          )
+          .map((b: any) => b.text)
+          .join("\n")
+          .trim();
+        if (!text) break;
+        if (p.role === "user" && CODEX_BOILERPLATE.some((m) => text.startsWith(m))) break;
+        messages.push({ role: p.role, text });
+        break;
+      }
+      case "function_call":
+      case "custom_tool_call": {
+        messages.push({ role: "assistant", text: renderCodexCall(p) });
+        break;
+      }
+      case "function_call_output":
+      case "custom_tool_call_output": {
+        const out = typeof p.output === "string" ? p.output : "";
+        if (out) messages.push({ role: "user", text: `[tool_result] ${clipResult(out)}` });
+        break;
+      }
+    }
+  }
+  const pairs: Pair[] = [];
+  let pendingUser: string | null = null;
+  for (const m of messages) {
+    if (m.role === "user") {
+      pendingUser = m.text;
+    } else if (m.role === "assistant" && pendingUser) {
+      pairs.push({ user: pendingUser, assistant: m.text });
+      pendingUser = null;
+    }
+  }
+  return { pairs: pairs.slice(-max), cwds };
+}
+
+function renderCodexCall(p: any): string {
+  const name = typeof p.name === "string" ? p.name : "tool";
+  try {
+    const args = JSON.parse(p.arguments ?? "{}");
+    if (name === "exec_command" && typeof args.cmd === "string") {
+      return `[exec: ${truncate(args.cmd, 200)}]`;
+    }
+    if (typeof args.path === "string" || typeof args.file_path === "string") {
+      return `[${name} ${args.path ?? args.file_path}]`;
+    }
+  } catch {
+    // unparseable arguments: name-only
   }
   return `[tool: ${name}]`;
 }

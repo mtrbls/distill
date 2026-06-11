@@ -6,6 +6,21 @@ and distill adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Added (Codex support)
+
+- distill mines OpenAI Codex sessions (`~/.codex/sessions` rollout
+  files) alongside Claude Code, mirroring the same pipeline: same
+  candidate → promote lifecycle, same evidence rules (tool commands,
+  error tails, correction priority), same git-anchored placement.
+  Codex-mined skills activate where Codex loads them: `.agents/skills/`
+  in the repo, `~/.agents/skills/` globally — Codex natively reads the
+  same SKILL.md format.
+- `distill install` wires Codex's `notify` hook
+  (`agent-turn-complete`) in `~/.codex/config.toml` when Codex is
+  present; never clobbers an existing notify. `distill uninstall`
+  removes it. Passes stay provider-pure: a session's provider decides
+  the parser and the activation directory.
+
 ## [0.2.0] - 2026-06-10
 
 ### Added (candidate skill tier)
