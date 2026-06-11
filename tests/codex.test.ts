@@ -114,6 +114,97 @@ describe("codex harvest", () => {
   });
 });
 
+describe("codex usage extraction (sync payload)", () => {
+  test("builds session + turns with tokens, model, and deterministic uuids", async () => {
+    const { extractCodexSession } = await import("../src/upskill/usage.ts");
+    const lines = [
+      {
+        type: "session_meta",
+        timestamp: "2026-06-11T08:00:00.000Z",
+        payload: {
+          id: "sess-1",
+          cwd: "/Users/alice/proj",
+          cli_version: "0.115.0",
+          originator: "codex-tui",
+          git: { branch: "main", commit_hash: "abc" },
+        },
+      },
+      {
+        type: "turn_context",
+        timestamp: "2026-06-11T08:00:01.000Z",
+        payload: { turn_id: "t1", cwd: "/Users/alice/proj", model: "gpt-5.4" },
+      },
+      {
+        type: "response_item",
+        timestamp: "2026-06-11T08:00:02.000Z",
+        payload: { type: "message", role: "user", content: [{ type: "input_text", text: "q" }] },
+      },
+      {
+        type: "response_item",
+        timestamp: "2026-06-11T08:00:03.000Z",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: '{"cmd":"ls"}',
+          call_id: "c1",
+        },
+      },
+      {
+        type: "response_item",
+        timestamp: "2026-06-11T08:00:04.000Z",
+        payload: { type: "function_call_output", call_id: "c1", output: "ok" },
+      },
+      {
+        type: "response_item",
+        timestamp: "2026-06-11T08:00:05.000Z",
+        payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "a" }] },
+      },
+      {
+        type: "event_msg",
+        timestamp: "2026-06-11T08:00:06.000Z",
+        payload: {
+          type: "token_count",
+          info: {
+            last_token_usage: {
+              input_tokens: 100,
+              cached_input_tokens: 60,
+              output_tokens: 20,
+              reasoning_output_tokens: 5,
+            },
+          },
+        },
+      },
+    ];
+    const p = writeRollout("2026/06/11/rollout-usage.jsonl", lines);
+    const e = extractCodexSession(p)!;
+    expect(e.session.id).toBe("sess-1");
+    expect(e.session.git_branch).toBe("main");
+    expect(e.session.started_at).toBe("2026-06-11T08:00:00.000Z");
+    expect(e.session.ended_at).toBe("2026-06-11T08:00:06.000Z");
+    expect(e.turns.map((t) => t.turn_type)).toEqual(["user", "assistant", "tool_result", "assistant"]);
+    expect(e.turns[1]!.tool_names).toEqual(["exec_command"]);
+    // usage attaches to the most recent assistant turn
+    const last = e.turns[3]!;
+    expect(last.model_id).toBe("gpt-5.4");
+    expect(last.input_tokens).toBe(100);
+    expect(last.cache_read_tokens).toBe(60);
+    expect(last.output_tokens).toBe(25); // output + reasoning
+    // deterministic uuids: re-extracting yields identical ids
+    expect(extractCodexSession(p)!.turns.map((t) => t.uuid)).toEqual(e.turns.map((t) => t.uuid));
+    // never any content fields
+    const json = JSON.stringify(e);
+    expect(json).not.toContain('"q"');
+    expect(json).not.toContain("output_text");
+  });
+
+  test("assembleIngestRequest tags codex payloads", async () => {
+    const { assembleIngestRequest } = await import("../src/upskill/plouto.ts");
+    const req = assembleIngestRequest([], "a@b.c", "codex");
+    expect(req.provider_kind).toBe("codex");
+    expect(assembleIngestRequest([], "a@b.c").provider_kind).toBe("claude_code");
+  });
+});
+
 describe("codex discovery", () => {
   const WATERMARK = { version: 1, lastDate: null, lastSessionUuid: null };
 

@@ -13,7 +13,13 @@ import {
   setPloutoConnection,
   type PloutoConfig,
 } from "./config.ts";
-import { extractSession, listSessionFiles, type ExtractedSession } from "./usage.ts";
+import { listCodexSessionFiles } from "./discover.ts";
+import {
+  extractCodexSession,
+  extractSession,
+  listSessionFiles,
+  type ExtractedSession,
+} from "./usage.ts";
 
 const log = createLogger("plouto");
 
@@ -27,11 +33,12 @@ const CONNECT_TIMEOUT_MS = 120_000;
 const ACTIVE_SESSION_GRACE_MS = 30_000;
 
 const SESSIONS_ROOT = join(homedir(), ".claude", "projects");
+const CODEX_SESSIONS_ROOT = join(homedir(), ".codex", "sessions");
 
 // ---------- payload assembly ----------
 
 export interface IngestRequest {
-  provider_kind: "claude_code";
+  provider_kind: "claude_code" | "codex";
   sessions: unknown[];
   turns: unknown[];
   errors: unknown[];
@@ -41,9 +48,10 @@ export interface IngestRequest {
 export function assembleIngestRequest(
   extracted: ExtractedSession[],
   email: string,
+  providerKind: IngestRequest["provider_kind"] = "claude_code",
 ): IngestRequest {
   return {
-    provider_kind: "claude_code",
+    provider_kind: providerKind,
     sessions: extracted.map((e) => e.session),
     turns: extracted.flatMap((e) => e.turns),
     errors: [],
@@ -61,16 +69,30 @@ export interface SyncResult {
   reason: string;
 }
 
-export async function syncRecent(opts: { sessionsRoot?: string } = {}): Promise<SyncResult> {
+export async function syncRecent(
+  opts: { sessionsRoot?: string; codexSessionsRoot?: string } = {},
+): Promise<SyncResult> {
   const cfg = readConfig();
   if (!cfg.plouto?.token) {
     return { ok: false, sessionsSynced: 0, sessionsUpserted: 0, turnsUpserted: 0, reason: "not connected" };
   }
 
   const root = opts.sessionsRoot ?? SESSIONS_ROOT;
+  const codexRoot = opts.codexSessionsRoot ?? CODEX_SESSIONS_ROOT;
   const since = cfg.plouto.last_synced_at ? Date.parse(cfg.plouto.last_synced_at) : 0;
 
-  const candidates = listSessionFiles(root, since).map((p) => ({ p, mtime: mtimeOf(p) }));
+  const candidates = [
+    ...listSessionFiles(root, since).map((p) => ({
+      p,
+      mtime: mtimeOf(p),
+      provider: "claude_code" as const,
+    })),
+    ...listCodexSessionFiles(codexRoot, since).map((p) => ({
+      p,
+      mtime: mtimeOf(p),
+      provider: "codex" as const,
+    })),
+  ];
   const files = pickSyncBatch(candidates, since, Date.now());
 
   if (files.length === 0) {
@@ -84,7 +106,9 @@ export async function syncRecent(opts: { sessionsRoot?: string } = {}): Promise<
   let turnsUpserted = 0;
 
   for (const f of files) {
-    const extracted = extractSession(f.p);
+    const provider = f.provider ?? "claude_code";
+    const extracted =
+      provider === "codex" ? extractCodexSession(f.p) : extractSession(f.p);
     if (!extracted) {
       advanceSyncWatermark(new Date(f.mtime).toISOString());
       continue;
@@ -95,7 +119,7 @@ export async function syncRecent(opts: { sessionsRoot?: string } = {}): Promise<
     // not once per chunk.
     let firstChunk = true;
     for (const chunk of chunkTurns(extracted)) {
-      const body = assembleIngestRequest([chunk], email);
+      const body = assembleIngestRequest([chunk], email, provider);
       const result = await postIngest(url, cfg.plouto.token, body);
       if (!result.ok) {
         return {
@@ -182,11 +206,11 @@ function mtimeOf(p: string): number {
 // the no-bulk-backfill decision. Steady state: the OLDEST N above the
 // watermark, so a backlog catches up across triggers instead of
 // silently dropping whatever didn't fit in one batch.
-export function pickSyncBatch(
-  files: { p: string; mtime: number }[],
+export function pickSyncBatch<T extends { p: string; mtime: number }>(
+  files: T[],
   since: number,
   nowMs: number,
-): { p: string; mtime: number }[] {
+): T[] {
   const eligible = files
     .filter((f) => f.mtime > since && f.mtime <= nowMs - ACTIVE_SESSION_GRACE_MS)
     .sort((a, b) => a.mtime - b.mtime);

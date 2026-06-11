@@ -233,6 +233,138 @@ function extractTurn(line: any, fallbackSessionId: string): TurnPayload | null {
   return out;
 }
 
+// ---------- Codex rollout extractor ----------
+// Same whitelist discipline as the Claude extractor: counts, enums,
+// names — never content. Every rollout line carries a top-level
+// timestamp; model comes from turn_context, usage from token_count
+// (applied to the most recent assistant turn).
+
+export function extractCodexSession(jsonlPath: string): ExtractedSession | null {
+  let raw: string;
+  try {
+    raw = readFileSync(jsonlPath, "utf-8");
+  } catch {
+    return null;
+  }
+
+  let session: SessionPayload | null = null;
+  const turns: TurnPayload[] = [];
+  let model: string | null = null;
+  let firstTs: string | null = null;
+  let lastTs: string | null = null;
+  let lineIdx = -1;
+
+  for (const line of raw.split("\n")) {
+    lineIdx++;
+    if (!line) continue;
+    let obj: any;
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const ts = safeStr(obj.timestamp);
+    if (ts) {
+      if (!firstTs) firstTs = ts;
+      lastTs = ts;
+    }
+    const p = obj?.payload;
+    if (!p || typeof p !== "object") continue;
+
+    if (obj.type === "session_meta") {
+      session = {
+        id: safeStr(p.id) ?? basename(jsonlPath).replace(/\.jsonl$/, ""),
+        workspace_id: "",
+        cwd: safeStr(p.cwd) ?? "",
+        project_path_encoded: (safeStr(p.cwd) ?? "").replace(/[/.]/g, "-"),
+        git_branch: safeStr(p?.git?.branch),
+        cli_version: safeStr(p.cli_version),
+        user_type: null,
+        entrypoint: safeStr(p.originator),
+        permission_mode: null,
+        started_at: ts ?? new Date(0).toISOString(),
+        ended_at: null,
+        total_turns: 0,
+        is_subagent: 0,
+        parent_session_id: null,
+        jsonl_path: jsonlPath,
+        jsonl_offset: 0,
+      };
+      continue;
+    }
+    if (obj.type === "turn_context") {
+      model = safeStr(p.model) ?? model;
+      continue;
+    }
+    if (obj.type === "event_msg" && p.type === "token_count") {
+      // usage arrives as an event after the model turn; attach to the
+      // most recent assistant turn
+      const u = p?.info?.last_token_usage;
+      const target = [...turns].reverse().find((t) => t.turn_type === "assistant");
+      if (u && target) {
+        target.input_tokens = safeInt(u.input_tokens);
+        target.cache_read_tokens = safeInt(u.cached_input_tokens);
+        target.output_tokens = safeInt(u.output_tokens) + safeInt(u.reasoning_output_tokens);
+      }
+      continue;
+    }
+    if (obj.type !== "response_item" || !session || !ts) continue;
+
+    let turnType: string | null = null;
+    let toolNames: string[] = [];
+    switch (p.type) {
+      case "message":
+        if (p.role === "user") turnType = "user";
+        else if (p.role === "assistant") turnType = "assistant";
+        break;
+      case "function_call":
+      case "custom_tool_call":
+        turnType = "assistant";
+        if (typeof p.name === "string") toolNames = [p.name];
+        break;
+      case "function_call_output":
+      case "custom_tool_call_output":
+        turnType = "tool_result";
+        break;
+    }
+    if (!turnType) continue;
+    turns.push({
+      uuid: `${session.id}-${lineIdx}`,
+      session_id: session.id,
+      workspace_id: "",
+      parent_uuid: null,
+      is_sidechain: false,
+      turn_type: turnType,
+      timestamp: ts,
+      model_id: turnType === "assistant" ? model : null,
+      stop_reason: null,
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_tokens: 0,
+      cache_creation_5m_tokens: 0,
+      cache_creation_1h_tokens: 0,
+      web_search_count: 0,
+      web_fetch_count: 0,
+      tool_name: toolNames[0] ?? null,
+      tool_names: toolNames,
+      tool_count: toolNames.length,
+      block_counts: {},
+      has_thinking: false,
+      has_image: false,
+      speed: null,
+      service_tier: null,
+      request_id: null,
+      message_id: null,
+    });
+  }
+
+  if (!session) return null;
+  session.started_at = firstTs ?? session.started_at;
+  session.ended_at = lastTs;
+  session.total_turns = turns.length;
+  return { session, turns };
+}
+
 // ---------- skill invocations (local display only, not synced) ----------
 
 export function extractSkillInvocations(jsonlPath: string): string[] {

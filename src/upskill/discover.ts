@@ -135,6 +135,16 @@ function walkJsonl(dir: string, depth: number): string[] {
   return out;
 }
 
+export function listCodexSessionFiles(root: string, sinceMs: number): string[] {
+  return walkJsonl(root, 3).filter((p) => {
+    try {
+      return statSync(p).mtimeMs >= sinceMs;
+    } catch {
+      return false;
+    }
+  });
+}
+
 // Codex's notify payload carries no transcript path; at
 // agent-turn-complete the newest rollout is the triggering session
 export function newestCodexSession(root: string): string | null {
